@@ -114,22 +114,55 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 1.D. MISE À JOUR DE LA PROMOTION / CAMPAGNE EN DIRECT (POST /api/merchants/update-campaign)
-  if (url.pathname === '/api/merchants/update-campaign' && req.method === 'POST') {
-    const body = await parseJsonBody(req);
-    const shopSlug = body.shop || 'boutique_mode';
-    const campaignText = body.campaign || '';
+  // 1.E. TÉLÉCHARGEMENT DE FICHIERS (DOCUMENTS PDF / PHOTOS) (POST /api/upload)
+  if (url.pathname === '/api/upload' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      const fileName = (body.fileName || `doc_${Date.now()}.pdf`).replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const base64Data = body.fileBase64 ? body.fileBase64.replace(/^data:.*,/, '') : '';
 
-    const merchant = yeBrain.getMerchantConfig(shopSlug);
-    if (merchant) {
-      merchant.currentCampaign = campaignText;
-      if (campaignText) {
-        merchant.systemPrompt += `\n\n### 📢 PROMOTION / CAMPAGNE EN COURS DU MOMENT :\n${campaignText}\n(Mentionne chaleureusement cette promotion au client si pertinent !)`;
+      const uploadsDir = path.join(__dirname, '..', 'public', 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
       }
-    }
 
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: true, message: 'Promotion activée avec succès' }));
+      const filePath = path.join(uploadsDir, fileName);
+      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+
+      const host = req.headers.host || 'localhost:3000';
+      const protocol = host.includes('localhost') ? 'http' : 'https';
+      const fileUrl = `${protocol}://${host}/uploads/${fileName}`;
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: true, fileName, fileUrl }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
+  // 1.F. SERVICE DES FICHIERS ENVOYÉS (GET /uploads/*)
+  if (url.pathname.startsWith('/uploads/') && req.method === 'GET') {
+    try {
+      const safePath = path.normalize(url.pathname).replace(/^(\.\.[\/\\])+/, '');
+      const filePath = path.join(__dirname, '..', 'public', safePath);
+      if (fs.existsSync(filePath)) {
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeTypes = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.pdf': 'application/pdf',
+          '.txt': 'text/plain; charset=utf-8'
+        };
+        res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+    } catch (e) {}
+    res.writeHead(404);
+    res.end('Fichier non trouvé');
     return;
   }
 
