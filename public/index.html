@@ -578,6 +578,11 @@
       </div>
 
       <div class="form-group">
+        <label>Prénom & Titre de votre Assistant IA (Personnalisé)</label>
+        <input type="text" id="cfg-botname" class="form-control" placeholder="Ex: Chantal (Conseillère Vente), Alain (Chef Pizzeria), Mireille...">
+      </div>
+
+      <div class="form-group">
         <label>Ville & Quartier</label>
         <input type="text" id="cfg-city" class="form-control" placeholder="Ex: Douala, Akwa">
       </div>
@@ -790,6 +795,7 @@
 
     async function saveCustomConfig() {
       const name = document.getElementById('cfg-name').value.trim() || 'Ma Boutique';
+      const botName = document.getElementById('cfg-botname')?.value.trim() || 'Sarah';
       const city = document.getElementById('cfg-city').value.trim() || 'Douala';
       const products = document.getElementById('cfg-products').value.trim();
       const delivery = document.getElementById('cfg-delivery').value.trim();
@@ -808,11 +814,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             businessName: name,
+            botName: botName,
             city: city,
             managerPhone: phone,
             deliveryTerms: delivery,
             customDocs: docsSummary,
-            customPrompt: `Tu es le conseiller de vente chaleureux et dynamique de la boutique "${name}" située à ${city}. Présente les articles suivants, renseigne sur les prix et la livraison (${delivery}) et prends les commandes :\n${products}\n\nDocuments et photos officiels disponibles :\n${docsSummary}`
+            customPrompt: `Tu es ${botName}, le conseiller de vente chaleureux et dynamique de la boutique "${name}" située à ${city}. Présente les articles suivants, renseigne sur les prix et la livraison (${delivery}) et prends les commandes :\n${products}\n\nDocuments et photos officiels disponibles :\n${docsSummary}`
           })
         });
 

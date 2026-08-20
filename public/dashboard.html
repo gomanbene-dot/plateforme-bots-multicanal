@@ -106,6 +106,19 @@
       <button class="btn-action" onclick="saveCampaign()">Sauvegarder & Diffuser la Promotion 🚀</button>
     </div>
 
+    <!-- Historique des Conversations en Direct -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3>💬 Historique des Discussions en Direct</h3>
+        <button class="btn-action" onclick="loadConversations()" style="padding: 6px 12px; font-size: 12px;">Actualiser 🔄</button>
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">Consultez les messages échangés entre vos clients et votre assistant IA :</p>
+      
+      <div id="conversations-container" style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto;">
+        <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px;">Aucune conversation enregistrée pour le moment.</div>
+      </div>
+    </div>
+
     <!-- Recharger les Crédits PayMooney -->
     <div class="card">
       <h3>💳 Recharger mon Assistant (Orange Money & MTN MoMo)</h3>
@@ -132,7 +145,7 @@
         if (data.success && data.merchant) {
           const m = data.merchant;
           document.getElementById('merchant-name').innerText = m.businessName || 'Ma Boutique';
-          document.getElementById('merchant-city').innerText = `Localisation : ${m.city || 'Yaoundé'} | Livraison : ${m.deliveryTerms || 'Disponible'}`;
+          document.getElementById('merchant-city').innerText = `Localisation : ${m.city || 'Yaoundé'} | Assistant : ${m.botName || 'Sarah'} | Livraison : ${m.deliveryTerms || 'Disponible'}`;
           document.getElementById('stat-credits').innerText = m.credits_remaining ?? 20;
           document.getElementById('stat-answered').innerText = m.total_messages_processed ?? 0;
           document.getElementById('link-tg').innerText = `https://t.me/Alnafisnolan_bot?start=${shopSlug}`;
@@ -140,6 +153,29 @@
           if (m.currentCampaign) {
             document.getElementById('campaign-text').value = m.currentCampaign;
           }
+        }
+      } catch (e) {}
+      loadConversations();
+    }
+
+    async function loadConversations() {
+      const container = document.getElementById('conversations-container');
+      try {
+        const res = await fetch(`/api/merchants/conversations?shop=${shopSlug}`);
+        const data = await res.json();
+        if (data.success && data.conversations && data.conversations.length > 0) {
+          container.innerHTML = data.conversations.map(c => `
+            <div style="background: #1a233a; border: 1px solid var(--card-border); border-radius: 12px; padding: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-weight: 700; font-size: 13px; color: var(--text-main);">👤 ${c.senderName || 'Client'} <span style="font-size: 11px; color: var(--wa-green); background: rgba(37, 211, 102, 0.1); padding: 2px 6px; border-radius: 10px; margin-left: 6px;">${c.platform.toUpperCase()}</span></span>
+                <span style="font-size: 11px; color: var(--text-muted);">${c.time || ''}</span>
+              </div>
+              <div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;"><strong>Client:</strong> "${c.userMessage}"</div>
+              <div style="font-size: 12px; color: #38bdf8; background: #0f172a; padding: 8px 10px; border-radius: 8px;"><strong>🤖 IA:</strong> ${c.botReply}</div>
+            </div>
+          `).join('');
+        } else {
+          container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px;">Aucune conversation récente. Partagez votre lien pour recevoir vos premiers messages !</div>`;
         }
       } catch (e) {}
     }

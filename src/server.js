@@ -275,35 +275,50 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 7. INSCRIPTION AUTONOME DU COMMERÇANT (POST /api/merchants/register)
+  // 7. HISTORIQUE DES CONVERSATIONS EN DIRECT (GET /api/merchants/conversations)
+  if (url.pathname === '/api/merchants/conversations' && req.method === 'GET') {
+    const shopSlug = url.searchParams.get('shop') || 'boutique_mode';
+    const list = yeBrain.getMerchantConversations(shopSlug);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, count: list.length, conversations: list }));
+    return;
+  }
+
+  // 8. INSCRIPTION AUTONOME DU COMMERÇANT (POST /api/merchants/register)
   if (req.method === 'POST' && url.pathname === '/api/merchants/register') {
     const body = await parseJsonBody(req);
     const businessName = body.businessName || 'Ma Boutique';
+    const botName = body.botName || 'Sarah';
+    const logoUrl = body.logoUrl || '';
     const managerPhone = body.managerPhone || '';
     const city = body.city || 'Yaoundé';
     const deliveryTerms = body.deliveryTerms || 'Livraison disponible';
     const catalog = body.catalog || [];
+    const customDocs = body.customDocs || '';
     const customPrompt = body.customPrompt || '';
 
-    // Génération automatique du slug unique (ex: "kfashion_douala")
+    // Génération automatique du slug unique
     const rawSlug = businessName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 25);
     const slug = `${rawSlug}_${Math.floor(100 + Math.random() * 900)}`;
 
     const merchantData = {
       businessName,
+      botName,
+      logoUrl,
       managerPhone,
       city,
       deliveryTerms,
       catalog,
-      systemPrompt: customPrompt || `Tu es le conseiller commercial dynamique de "${businessName}" à ${city}. Présente les articles, informe sur la livraison (${deliveryTerms}) et prends les commandes.`,
+      customDocs,
+      systemPrompt: customPrompt || `Tu es ${botName}, le conseiller de vente chaleureux et dynamique de "${businessName}" à ${city}. Présente les articles, informe sur la livraison (${deliveryTerms}) et prends les commandes.`,
       credits_remaining: 20,
-      total_messages_processed: 0
+      total_messages_processed: 0,
+      recentConversations: []
     };
 
     // Enregistrement en mémoire instantanée
     yeBrain.registerMerchant(slug, merchantData);
 
-    // Enregistrement asynchrone dans Supabase si configuré
     if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       try {
         fetch(`${process.env.SUPABASE_URL}/rest/v1/merchants`, {
@@ -335,9 +350,12 @@ const server = http.createServer(async (req, res) => {
       success: true,
       slug: slug,
       businessName: businessName,
+      botName: botName,
+      logoUrl: logoUrl,
       links: {
         telegram: `https://t.me/Alnafisnolan_bot?start=${slug}`,
         webChat: `${protocol}://${host}/?shop=${slug}`,
+        dashboard: `${protocol}://${host}/dashboard?shop=${slug}`,
         qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://t.me/Alnafisnolan_bot?start=${slug}`
       },
       message: "Boutique configurée avec succès ! Vos 20 messages d'essai sont activés."

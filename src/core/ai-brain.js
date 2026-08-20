@@ -112,6 +112,20 @@ export class AiBrain {
 
       const replyText = result.text || `Bonjour ${userName} ! Comment puis-je vous renseigner chez ${activeConfig.businessName || 'nous'} ? 😊`;
       this.sessionManager.recordAssistantMessage(senderKey, replyText);
+
+      // Enregistrer dans l'historique de la boutique pour le Dashboard
+      if (!activeConfig.recentConversations) activeConfig.recentConversations = [];
+      activeConfig.recentConversations.unshift({
+        senderName: userName,
+        senderKey: senderKey,
+        platform: platform,
+        userMessage: cleanMessage,
+        botReply: replyText,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: new Date().toLocaleDateString()
+      });
+      if (activeConfig.recentConversations.length > 50) activeConfig.recentConversations.pop();
+
       return replyText;
     } catch (error) {
       console.error(`[AiBrain] Erreur pour ${senderKey} :`, error);
@@ -119,6 +133,11 @@ export class AiBrain {
       this.sessionManager.recordAssistantMessage(senderKey, fallback);
       return fallback;
     }
+  }
+
+  getMerchantConversations(slug) {
+    const config = this.getMerchantConfig(slug);
+    return config?.recentConversations || [];
   }
 
   canSendFreeformWhatsApp(senderKey) {
