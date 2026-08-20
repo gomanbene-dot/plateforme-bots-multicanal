@@ -77,6 +77,48 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 1.B. TABLEAU DE BORD PRIVÉ DU COMMERÇANT (GET /dashboard)
+  if (url.pathname === '/dashboard' && req.method === 'GET') {
+    try {
+      const htmlPath = path.join(__dirname, '..', 'public', 'dashboard.html');
+      const html = fs.readFileSync(htmlPath, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+    } catch (e) {
+      res.writeHead(404);
+      res.end('Dashboard non disponible');
+    }
+    return;
+  }
+
+  // 1.C. DÉTAILS D'UNE BOUTIQUE (GET /api/merchants/details)
+  if (url.pathname === '/api/merchants/details' && req.method === 'GET') {
+    const shopSlug = url.searchParams.get('shop') || 'boutique_mode';
+    const config = yeBrain.getMerchantConfig(shopSlug);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, merchant: config }));
+    return;
+  }
+
+  // 1.D. MISE À JOUR DE LA PROMOTION / CAMPAGNE EN DIRECT (POST /api/merchants/update-campaign)
+  if (url.pathname === '/api/merchants/update-campaign' && req.method === 'POST') {
+    const body = await parseJsonBody(req);
+    const shopSlug = body.shop || 'boutique_mode';
+    const campaignText = body.campaign || '';
+
+    const merchant = yeBrain.getMerchantConfig(shopSlug);
+    if (merchant) {
+      merchant.currentCampaign = campaignText;
+      if (campaignText) {
+        merchant.systemPrompt += `\n\n### 📢 PROMOTION / CAMPAGNE EN COURS DU MOMENT :\n${campaignText}\n(Mentionne chaleureusement cette promotion au client si pertinent !)`;
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, message: 'Promotion activée avec succès' }));
+    return;
+  }
+
   // 2. VÉRIFICATION DES WEBHOOKS META (WhatsApp / Instagram / Messenger)
   if (req.method === 'GET' && (url.pathname.startsWith('/webhook/'))) {
     const verification = whatsappAdapter.handleVerification(url.searchParams);

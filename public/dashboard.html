@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Espace Commerçant - Gestion de mon Assistant IA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --wa-green: #25D366;
+      --bg-dark: #090d16;
+      --card-bg: #131b2e;
+      --card-border: #1e293b;
+      --accent: #6366f1;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+    body { background: var(--bg-dark); color: var(--text-main); min-height: 100vh; padding: 20px; }
+    .container { max-width: 850px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--card-border); margin-bottom: 24px; }
+    .shop-badge { display: flex; align-items: center; gap: 12px; }
+    .shop-badge .icon { width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent), #25D366); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px; margin-bottom: 20px; }
+    .card h3 { font-size: 16px; margin-bottom: 16px; color: var(--wa-green); display: flex; align-items: center; gap: 8px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
+    .form-control { width: 100%; background: #1a233a; border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; color: white; font-size: 14px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+    .stat-box { background: #1a233a; border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; text-align: center; }
+    .stat-box .num { font-size: 26px; font-weight: 800; color: var(--wa-green); }
+    .stat-box .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-top: 4px; }
+    .btn-action { background: var(--accent); color: white; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+    .btn-action:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-momo { background: #25D366; color: black; font-weight: 800; }
+    .links-box { background: #0f172a; border-radius: 10px; padding: 12px; display: flex; gap: 8px; align-items: center; margin-top: 8px; font-family: monospace; font-size: 13px; word-break: break-all; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="shop-badge">
+        <div class="icon">🏬</div>
+        <div>
+          <h1 id="merchant-name">Espace Ma Boutique</h1>
+          <p style="font-size: 12px; color: var(--text-muted);" id="merchant-city">Tableau de bord de gestion de l'Assistant IA</p>
+        </div>
+      </div>
+      <div>
+        <span style="background: rgba(37, 211, 102, 0.15); color: var(--wa-green); border: 1px solid var(--wa-green); padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">● Bot IA Actif 24h/24</span>
+      </div>
+    </header>
+
+    <!-- Statistiques & Crédits -->
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="num" id="stat-credits">20</div>
+        <div class="label">Crédits Messages Restants</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="stat-answered">0</div>
+        <div class="label">Clients Accueillis</div>
+      </div>
+      <div class="stat-box">
+        <div class="num">100%</div>
+        <div class="label">Disponibilité 24h/24</div>
+      </div>
+    </div>
+
+    <!-- Liens de Partage du Commerçant -->
+    <div class="card">
+      <h3>📱 Vos Liens de Vente & QR Code (À donner à vos clients)</h3>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Mettez ce lien sur vos statuts WhatsApp, votre page Facebook ou votre bio Instagram :</p>
+      
+      <div class="form-group">
+        <label>Lien Telegram Direct :</label>
+        <div class="links-box">
+          <span id="link-tg" style="flex: 1;">https://t.me/Alnafisnolan_bot</span>
+          <button class="btn-action" onclick="copyLink('link-tg')" style="padding: 6px 12px; font-size: 12px;">Copier 📋</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Lien Chat Web Direct (Pour ceux qui n'ont pas de réseau social) :</label>
+        <div class="links-box">
+          <span id="link-web" style="flex: 1;">https://plateforme-bots-multicanal-production.up.railway.app</span>
+          <button class="btn-action" onclick="copyLink('link-web')" style="padding: 6px 12px; font-size: 12px;">Copier 📋</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Campagnes & Promotions en Cours -->
+    <div class="card">
+      <h3>📢 Campagnes & Promotions Flash du Moment</h3>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">Indiquez ici vos réductions ou événements en cours. L'IA les proposera automatiquement à chaque client qui vous écrit !</p>
+      
+      <div class="form-group">
+        <label>Texte de la Promotion (ex: Rentrée scolaire, Soldes -20%, etc.) :</label>
+        <textarea id="campaign-text" class="form-control" rows="3" placeholder="Ex: Promotion spéciale ce week-end : -20% sur toutes les robes et livraison gratuite à partir de 2 articles commandés !"></textarea>
+      </div>
+
+      <button class="btn-action" onclick="saveCampaign()">Sauvegarder & Diffuser la Promotion 🚀</button>
+    </div>
+
+    <!-- Recharger les Crédits PayMooney -->
+    <div class="card">
+      <h3>💳 Recharger mon Assistant (Orange Money & MTN MoMo)</h3>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">Choisissez un forfait pour que votre bot continue de répondre à vos clients sans interruption :</p>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+        <button class="btn-action btn-momo" onclick="buyPack('pack_500')">Mini-Pack (100 msg)<br><span style="font-size: 18px;">500 FCFA</span></button>
+        <button class="btn-action btn-momo" onclick="buyPack('pack_2500')">Pack Semaine (600 msg)<br><span style="font-size: 18px;">2.500 FCFA</span></button>
+        <button class="btn-action btn-momo" onclick="buyPack('pack_5000')">Pack Mensuel (1.500 msg)<br><span style="font-size: 18px;">5.000 FCFA</span></button>
+        <button class="btn-action btn-momo" onclick="buyPack('pack_10000')">Pack Pro (4.000 msg)<br><span style="font-size: 18px;">10.000 FCFA</span></button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const shopSlug = urlParams.get('shop') || 'boutique_mode';
+
+    async function loadShopData() {
+      try {
+        const res = await fetch(`/api/merchants/details?shop=${shopSlug}`);
+        const data = await res.json();
+        if (data.success && data.merchant) {
+          const m = data.merchant;
+          document.getElementById('merchant-name').innerText = m.businessName || 'Ma Boutique';
+          document.getElementById('merchant-city').innerText = `Localisation : ${m.city || 'Yaoundé'} | Livraison : ${m.deliveryTerms || 'Disponible'}`;
+          document.getElementById('stat-credits').innerText = m.credits_remaining ?? 20;
+          document.getElementById('stat-answered').innerText = m.total_messages_processed ?? 0;
+          document.getElementById('link-tg').innerText = `https://t.me/Alnafisnolan_bot?start=${shopSlug}`;
+          document.getElementById('link-web').innerText = `${window.location.origin}/?shop=${shopSlug}`;
+          if (m.currentCampaign) {
+            document.getElementById('campaign-text').value = m.currentCampaign;
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function saveCampaign() {
+      const text = document.getElementById('campaign-text').value.trim();
+      try {
+        const res = await fetch('/api/merchants/update-campaign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shop: shopSlug, campaign: text })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ Promotion enregistrée avec succès ! Votre assistant IA informe désormais tous vos clients.');
+        }
+      } catch (err) {
+        alert('Erreur lors de la sauvegarde de la promotion.');
+      }
+    }
+
+    async function buyPack(packId) {
+      try {
+        const res = await fetch('/api/paymooney/create-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ packId: packId, merchantInfo: { name: shopSlug }, returnUrl: window.location.href })
+        });
+        const data = await res.json();
+        if (data.success && data.paymentUrl) {
+          window.location.href = data.paymentUrl;
+        } else {
+          alert('Erreur génération paiement : ' + (data.error || 'Réessayez'));
+        }
+      } catch (err) {
+        alert('Erreur de connexion PayMooney.');
+      }
+    }
+
+    function copyLink(elementId) {
+      const text = document.getElementById(elementId).innerText;
+      navigator.clipboard.writeText(text);
+      alert('Lien copié dans le presse-papier !');
+    }
+
+    loadShopData();
+  </script>
+</body>
+</html>
