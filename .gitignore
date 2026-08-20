@@ -1,0 +1,15 @@
+# Fichiers de configuration et secrets sensibles
+.env
+.env.local
+*.env
+
+# Dépendances Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs et traces temporaires
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulateur Bot IA Omnicanal (WhatsApp, Telegram, Messenger)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --wa-green: #25D366;
+      --wa-dark-green: #075E54;
+      --wa-bg: #EFEAE2;
+      --wa-chat-bg: #0b141a;
+      --wa-bubble-out: #005c4b;
+      --wa-bubble-in: #202c33;
+      --bg-dark: #090d16;
+      --card-bg: #131b2e;
+      --card-border: #1e293b;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(19, 27, 46, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .logo-badge {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-badge .icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #25D366, #128C7E);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+    }
+
+    .logo-badge h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-badge span {
+      font-size: 12px;
+      color: var(--wa-green);
+      display: block;
+      font-weight: 600;
+    }
+
+    .main-container {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 24px;
+      max-width: 1300px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      flex: 1;
+    }
+
+    @media (max-width: 960px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Left Control Panel */
+    .control-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .panel-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .profile-tabs {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .profile-btn {
+      background: #1a233a;
+      border: 1px solid transparent;
+      padding: 12px 14px;
+      border-radius: 12px;
+      color: var(--text-main);
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .profile-btn:hover {
+      background: #232f4e;
+      border-color: #3b4d75;
+    }
+
+    .profile-btn.active {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(37, 211, 102, 0.15));
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+    }
+
+    .profile-btn .icon {
+      font-size: 24px;
+    }
+
+    .profile-btn .info h4 {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .profile-btn .info p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Channel Selector */
+    .channel-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .channel-btn {
+      background: #1a233a;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 6px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .channel-btn.active {
+      color: white;
+      border-color: var(--wa-green);
+      background: #0f2722;
+    }
+
+    /* Quick Test Prompts */
+    .quick-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .quick-chip {
+      background: #1e293b;
+      border: 1px solid #334155;
+      padding: 6px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-chip:hover {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    /* Phone Mockup Area */
+    .phone-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .smartphone {
+      width: 100%;
+      max-width: 440px;
+      height: 740px;
+      background: var(--wa-chat-bg);
+      border-radius: 36px;
+      border: 10px solid #1f293d;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px #334155;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .phone-header {
+      background: #202c33;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      z-index: 10;
+    }
+
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #374151;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .header-info {
+      flex: 1;
+    }
+
+    .header-info h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #e9edef;
+    }
+
+    .header-info p {
+      font-size: 12px;
+      color: var(--wa-green);
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0);
+      background-size: 20px 20px;
+    }
+
+    .message {
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      line-height: 1.45;
+      position: relative;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: var(--wa-bubble-out);
+      color: #e9edef;
+      border-bottom-right-radius: 2px;
+    }
+
+    .message.bot {
+      align-self: flex-start;
+      background: var(--wa-bubble-in);
+      color: #d1d7db;
+      border-bottom-left-radius: 2px;
+    }
+
+    .message .time {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.5);
+      text-align: right;
+      margin-top: 4px;
+      display: block;
+    }
+
+    .typing-indicator {
+      display: none;
+      align-self: flex-start;
+      background: var(--wa-bubble-in);
+      padding: 10px 14px;
+      border-radius: 12px;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      background: #8696a0;
+      border-radius: 50%;
+      animation: typing 1.4s infinite ease-in-out both;
+    }
+
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes typing {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+    .chat-input-area {
+      background: #202c33;
+      padding: 10px 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: #2a3942;
+      border: none;
+      outline: none;
+      padding: 10px 14px;
+      border-radius: 20px;
+      color: white;
+      font-size: 14px;
+    }
+
+    .send-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--wa-green);
+      border: none;
+      color: #0b141a;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: transform 0.15s;
+    }
+
+    .send-btn:active {
+      transform: scale(0.92);
+    }
+
+    /* Modal / Customizer */
+    .config-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .modal-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      width: 90%;
+      max-width: 580px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .form-control {
+      width: 100%;
+      background: #1a233a;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: white;
+      font-size: 13px;
+    }
+
+    .btn-action {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-badge">
+      <div class="icon">🤖</div>
+      <div>
+        <h1>Bot IA Omnicanal Pro</h1>
+        <span>Moteur DeepSeek + Multi-Canaux Connectés</span>
+      </div>
+    </div>
+    <div>
+      <button class="quick-chip" onclick="openConfigModal()" style="background: var(--accent); color: white; border: none; font-weight: 700; padding: 8px 14px;">
+        ⚙️ Configurer ma Boutique
+      </button>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <!-- Panneau de Contrôle Gauche -->
+    <div class="control-panel">
+      
+      <div class="panel-card">
+        <div class="panel-title">🎯 Profil Commercial Actif</div>
+        <div class="profile-tabs">
+          <button class="profile-btn active" id="btn-profile-ye" onclick="selectProfile('ye')">
+            <div class="icon">🎓</div>
+            <div class="info">
+              <h4>YE (Répétiteur Virtuel)</h4>
+              <p>Vente d'abonnements scolaires</p>
+            </div>
+          </button>
+
+          <button class="profile-btn" id="btn-profile-boutique" onclick="selectProfile('boutique')">
+            <div class="icon">👗</div>
+            <div class="info">
+              <h4>Boutique Élégance (Mode)</h4>
+              <p>Catalogue, tailles & commandes</p>
+            </div>
+          </button>
+
+          <button class="profile-btn" id="btn-profile-custom" onclick="openConfigModal()">
+            <div class="icon">✨</div>
+            <div class="info">
+              <h4 id="custom-profile-title">Ma Boutique Personnalisée</h4>
+              <p>Cliquez pour configurer vos produits</p>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-title">📱 Canal Réseau Social Simulé</div>
+        <div class="channel-selector">
+          <button class="channel-btn active" id="chan-whatsapp" onclick="setChannel('whatsapp')">
+            <span style="font-size: 18px;">🟢</span> WhatsApp
+          </button>
+          <button class="channel-btn" id="chan-telegram" onclick="setChannel('telegram')">
+            <span style="font-size: 18px;">🔵</span> Telegram
+          </button>
+          <button class="channel-btn" id="chan-instagram" onclick="setChannel('instagram')">
+            <span style="font-size: 18px;">🟣</span> Instagram
+          </button>
+          <button class="channel-btn" id="chan-messenger" onclick="setChannel('messenger')">
+            <span style="font-size: 18px;">🔷</span> Messenger
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-title">⚡ Questions Types (Test Rapide)</div>
+        <div class="quick-prompts" id="quick-prompts-container">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <div class="panel-card" style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+        <strong style="color: white;">ℹ️ Informations Webhooks :</strong><br>
+        • WhatsApp : <code>/webhook/whatsapp</code><br>
+        • Telegram : <code>/webhook/telegram</code><br>
+        • Instagram / Messenger : <code>/webhook/instagram</code>
+      </div>
+
+    </div>
+
+    <!-- Téléphone Mobile Mockup -->
+    <div class="phone-wrapper">
+      <div class="smartphone">
+        <div class="phone-header">
+          <div class="avatar" id="bot-avatar">🤖</div>
+          <div class="header-info">
+            <h3 id="bot-name">Sarah (Conseillère YE)</h3>
+            <p id="bot-status">● En ligne 24h/24 (DeepSeek IA)</p>
+          </div>
+          <button onclick="clearChat()" style="background: none; border: none; color: #8696a0; cursor: pointer; font-size: 18px;" title="Effacer la conversation">🗑️</button>
+        </div>
+
+        <div class="chat-messages" id="chat-box">
+          <!-- Messages will be injected here -->
+        </div>
+
+        <div class="typing-indicator" id="typing-indicator">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+
+        <form class="chat-input-area" onsubmit="handleUserSubmit(event)">
+          <input type="text" id="user-input" class="chat-input" placeholder="Écrivez un message comme un client..." autocomplete="off">
+          <button type="submit" class="send-btn">➤</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Personnalisation Commerçant -->
+  <div class="config-modal" id="configModal">
+    <div class="modal-box">
+      <h2 style="font-size: 18px; margin-bottom: 16px;">⚙️ Configurer votre Bot Commerçant</h2>
+      
+      <div class="form-group">
+        <label>Nom de l'entreprise ou boutique</label>
+        <input type="text" id="cfg-name" class="form-control" placeholder="Ex: Restaurant Le Délice / Clinique Santé Plus / Boutique K-Fashion">
+      </div>
+
+      <div class="form-group">
+        <label>Ville & Quartier</label>
+        <input type="text" id="cfg-city" class="form-control" placeholder="Ex: Douala, Akwa">
+      </div>
+
+      <div class="form-group">
+        <label>Produits, Tarifs ou Services (1 par ligne)</label>
+        <textarea id="cfg-products" class="form-control" rows="4" placeholder="Ex:&#10;- Pizza Royale : 6.000 FCFA&#10;- Burger Spécial : 3.500 FCFA&#10;- Jus naturel : 1.500 FCFA"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Conditions de livraison / Horaires</label>
+        <input type="text" id="cfg-delivery" class="form-control" placeholder="Ex: Livraison 1.000 FCFA à Douala. Ouvert 7j/7 de 10h à 23h">
+      </div>
+
+      <div class="form-group">
+        <label>Clé API DeepSeek (Optionnelle pour vos tests)</label>
+        <input type="password" id="cfg-key" class="form-control" placeholder="sk-...">
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button type="button" class="btn-action" onclick="saveCustomConfig()">Sauvegarder & Tester Immédiatement</button>
+        <button type="button" class="quick-chip" onclick="closeConfigModal()" style="background: #334155; color: white;">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentProfile = 'ye';
+    let currentChannel = 'whatsapp';
+    let userId = 'user_' + Math.floor(Math.random() * 10000);
+    let customConfig = null;
+
+    const quickQuestions = {
+      ye: [
+        "C'est quoi votre application ?",
+        "Combien coûte l'abonnement ?",
+        "Est-ce que ça marche sans connexion ?",
+        "Donnez-moi le lien de téléchargement",
+        "Avez-vous les cours de 3ème et Terminale ?"
+      ],
+      boutique: [
+        "Avez-vous des robes de soirée ?",
+        "C'est combien les Sneakers Nike ?",
+        "Faites-vous la livraison à Yaoundé ?",
+        "Je voudrais commander en taille 42",
+        "Quels sont vos moyens de paiement ?"
+      ],
+      custom: [
+        "Quels sont vos tarifs ?",
+        "Où êtes-vous situés ?",
+        "Comment passer commande ?",
+        "Avez-vous des disponibilités ?"
+      ]
+    };
+
+    function selectProfile(profile) {
+      currentProfile = profile;
+      document.querySelectorAll('.profile-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById('btn-profile-' + profile)?.classList.add('active');
+
+      const avatar = document.getElementById('bot-avatar');
+      const name = document.getElementById('bot-name');
+
+      if (profile === 'ye') {
+        avatar.innerText = '🎓';
+        name.innerText = 'Sarah (Conseillère YE)';
+      } else if (profile === 'boutique') {
+        avatar.innerText = '👗';
+        name.innerText = 'Chantal (Élégance & Style)';
+      } else {
+        avatar.innerText = '💼';
+        name.innerText = customConfig?.name || 'Assistant Pro';
+      }
+
+      updateQuickPrompts();
+      clearChat();
+      injectWelcomeMessage();
+    }
+
+    function setChannel(channel) {
+      currentChannel = channel;
+      document.querySelectorAll('.channel-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById('chan-' + channel)?.classList.add('active');
+    }
+
+    function updateQuickPrompts() {
+      const container = document.getElementById('quick-prompts-container');
+      const questions = quickQuestions[currentProfile] || quickQuestions.custom;
+      container.innerHTML = questions.map(q => `<button class="quick-chip" onclick="sendQuickMessage('${q.replace(/'/g, "\\'")}')">${q}</button>`).join('');
+    }
+
+    function injectWelcomeMessage() {
+      if (currentProfile === 'ye') {
+        addMessage("bot", "Bonjour et bienvenue chez YE (Almanach) ! 📚✨ Je suis Sarah, votre conseillère pédagogique. Comment puis-je vous aider pour la réussite scolaire de votre enfant ?");
+      } else if (currentProfile === 'boutique') {
+        addMessage("bot", "Bonjour et bienvenue chez Élégance & Style ! 👗✨ Je suis Chantal, à votre service. Que recherchez-vous aujourd'hui ?");
+      } else {
+        addMessage("bot", `Bonjour et bienvenue chez ${customConfig?.name || 'notre établissement'} ! 😊 Comment puis-je vous renseigner aujourd'hui ?`);
+      }
+    }
+
+    function addMessage(sender, text) {
+      const chatBox = document.getElementById('chat-box');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `message ${sender}`;
+      
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      msgDiv.innerHTML = `${text}<span class="time">${time}</span>`;
+      
+      chatBox.appendChild(msgDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function sendQuickMessage(text) {
+      document.getElementById('user-input').value = text;
+      handleUserSubmit(new Event('submit'));
+    }
+
+    async function handleUserSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('user-input');
+      const message = input.value.trim();
+      if (!message) return;
+
+      addMessage('user', message);
+      input.value = '';
+
+      const typing = document.getElementById('typing-indicator');
+      typing.style.display = 'flex';
+      document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            message: message,
+            botType: currentProfile,
+            platform: currentChannel,
+            customConfig: customConfig
+          })
+        });
+
+        const data = await res.json();
+        typing.style.display = 'none';
+        
+        if (data && data.reply) {
+          addMessage('bot', data.reply);
+        } else {
+          addMessage('bot', "Désolé, une petite erreur est survenue.");
+        }
+      } catch (err) {
+        typing.style.display = 'none';
+        addMessage('bot', "Erreur de communication avec le serveur.");
+      }
+    }
+
+    function clearChat() {
+      document.getElementById('chat-box').innerHTML = '';
+    }
+
+    function openConfigModal() {
+      document.getElementById('configModal').style.display = 'flex';
+    }
+
+    function closeConfigModal() {
+      document.getElementById('configModal').style.display = 'none';
+    }
+
+    function saveCustomConfig() {
+      const name = document.getElementById('cfg-name').value || 'Ma Super Boutique';
+      const city = document.getElementById('cfg-city').value || 'Douala';
+      const products = document.getElementById('cfg-products').value;
+      const delivery = document.getElementById('cfg-delivery').value;
+      const apiKey = document.getElementById('cfg-key').value;
+
+      customConfig = {
+        businessName: name,
+        city: city,
+        deliveryFees: delivery,
+        customKnowledge: products,
+        apiKey: apiKey
+      };
+
+      document.getElementById('custom-profile-title').innerText = name;
+      closeConfigModal();
+      selectProfile('custom');
+    }
+
+    // Init
+    selectProfile('ye');
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "omnichannel-ai-bot-platform",
+  "version": "1.0.0",
+  "description": "Plateforme universelle de Bots IA Omnicanaux (WhatsApp, Messenger, Instagram, Telegram) pour YE et commerçants",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {},
+  "author": "YE Education & Tech",
+  "license": "ISC"
+}
