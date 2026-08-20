@@ -63,6 +63,13 @@ export class KnowledgeBase {
       }
     }
 
+    // Injection des Documents, Liens PDF et Photos officielles
+    if (config.documents || config.customDocs) {
+      prompt += `\n\n### 📄 DOCUMENTS, BROCHURES PDF ET PHOTOS DE PRODUITS :`;
+      prompt += `\n${config.documents || config.customDocs}`;
+      prompt += `\n(Si le client demande à voir une photo ou le catalogue PDF complet, partage-lui poliment le lien direct correspondant !)`;
+    }
+
     prompt += `\n\n--- RÈGLE D'OR COMMERCIALE ---`;
     prompt += `\nSois toujours chaleureux(se), vendeur(se) et réactif(ve). Ne parle QUE des produits et informations listées ci-dessus. Si tu ne connais pas une information non listée, propose poliment de transmettre la demande au gérant humain.`;
 

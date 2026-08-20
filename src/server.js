@@ -77,8 +77,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 1.A. LOGO & FAVICON
+  if ((url.pathname === '/favicon.svg' || url.pathname === '/favicon.ico') && req.method === 'GET') {
+    try {
+      const svgPath = path.join(__dirname, '..', 'public', 'favicon.svg');
+      const svg = fs.readFileSync(svgPath, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      res.end(svg);
+    } catch (e) {
+      res.writeHead(404);
+      res.end();
+    }
+    return;
+  }
+
   // 1.B. TABLEAU DE BORD PRIVÉ DU COMMERÇANT (GET /dashboard)
-  if (url.pathname === '/dashboard' && req.method === 'GET') {
+  if ((url.pathname === '/dashboard' || url.pathname === '/dashboard.html') && req.method === 'GET') {
     try {
       const htmlPath = path.join(__dirname, '..', 'public', 'dashboard.html');
       const html = fs.readFileSync(htmlPath, 'utf8');
