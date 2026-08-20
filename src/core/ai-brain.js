@@ -1,9 +1,6 @@
 /**
- * Moteur IA Centralisé Multi-Canal (WhatsApp, Telegram, Messenger, Instagram, Web)
- * - Réponses ultra-concises & percutantes (spécial WhatsApp mobile)
- * - Personnalisation avec le Prénom/Nom de l'utilisateur
- * - Gestion des Quotas (20 messages gratuits, puis lien de recharge)
- * - Contrôle de pause & respect de la vie privée
+ * Moteur IA Multi-Boutiques Dynamique avec Support Deep-Linking (ex: /start boutique_nom)
+ * Permet à chaque commerçant d'avoir son propre lien sans intervention manuelle.
  */
 
 import { DeepSeekEngine } from './deepseek-engine.js';
@@ -11,31 +8,41 @@ import { KnowledgeBase } from './knowledge-base.js';
 import { SessionManager } from './session-manager.js';
 
 export class AiBrain {
-  constructor(config = {}, options = {}) {
-    this.config = config;
+  constructor(defaultConfig = {}, options = {}) {
+    this.defaultConfig = defaultConfig;
     this.engine = new DeepSeekEngine(options);
     this.sessionManager = new SessionManager({ maxHistoryLength: 10 });
     
-    // Système de crédits / quota de la boutique (20 messages d'essai par défaut)
-    this.freeCredits = config.freeCredits ?? 20;
-    this.totalCredits = config.totalCredits ?? 20;
-    this.usedMessagesCount = 0;
-  }
-
-  updateConfig(newConfig) {
-    this.config = { ...this.config, ...newConfig };
+    // Cache des boutiques en mémoire pour une vitesse instantanée
+    this.merchantCache = new Map(); // slug -> merchantData
   }
 
   /**
-   * Recharge les crédits d'une boutique après paiement
+   * Enregistre ou met à jour une boutique dans le cache
    */
-  addCredits(amount) {
-    this.totalCredits += amount;
-    console.log(`[Credits] Rechargé de ${amount} messages. Total disponible : ${this.totalCredits - this.usedMessagesCount}`);
+  registerMerchant(slug, merchantData) {
+    const cleanSlug = (slug || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '');
+    this.merchantCache.set(cleanSlug, {
+      ...merchantData,
+      slug: cleanSlug,
+      credits_remaining: merchantData.credits_remaining ?? 20,
+      total_messages_processed: merchantData.total_messages_processed ?? 0
+    });
+    console.log(`[Multi-Tenant] Boutique enregistrée en mémoire : ${cleanSlug}`);
+    return cleanSlug;
   }
 
   /**
-   * Traite un message entrant avec personnalisation du nom et concision
+   * Récupère la configuration d'une boutique par son slug ou retourne la config par défaut (YE)
+   */
+  getMerchantConfig(slug) {
+    if (!slug) return this.defaultConfig;
+    const cleanSlug = slug.toLowerCase().trim();
+    return this.merchantCache.get(cleanSlug) || this.defaultConfig;
+  }
+
+  /**
+   * Traite un message entrant avec résolution automatique de la boutique par deep-linking
    */
   async processMessage(senderKey, incomingMessage, platform = 'whatsapp', contextOverrides = {}) {
     if (!incomingMessage || typeof incomingMessage !== 'string' || !incomingMessage.trim()) {
@@ -44,44 +51,50 @@ export class AiBrain {
 
     const cleanMessage = incomingMessage.trim();
     const userName = contextOverrides.userName || 'Client';
+    const session = this.sessionManager.getSession(senderKey);
 
-    // 1. Vérification si le numéro fait partie des contacts privés du gérant
-    const rawNumber = senderKey.split(':')[1] || '';
-    if (this.sessionManager.isWhitelistedPrivateContact(rawNumber)) {
-      console.log(`[Privacy Protection] Contact personnel ignoré : ${senderKey}`);
-      return null;
+    // 1. Détection du Deep-Linking (ex: "/start boutique_kfashion" ou "START=boutique_kfashion")
+    if (cleanMessage.startsWith('/start') || cleanMessage.startsWith('START=')) {
+      const parts = cleanMessage.split(/[\s=]+/);
+      if (parts.length > 1) {
+        const potentialSlug = parts[1].toLowerCase().trim();
+        if (this.merchantCache.has(potentialSlug)) {
+          session.activeMerchantSlug = potentialSlug;
+          console.log(`[DeepLink] Utilisateur ${senderKey} rattaché à la boutique : ${potentialSlug}`);
+        }
+      }
     }
+
+    // Déterminer la boutique active pour cette conversation
+    const activeSlug = contextOverrides.merchantSlug || session.activeMerchantSlug;
+    const activeConfig = this.getMerchantConfig(activeSlug);
 
     // 2. Vérification des commandes de contrôle (#stop, #pause, #play)
     const controlResult = this.sessionManager.checkControlCommands(senderKey, cleanMessage);
-    if (controlResult === 'PAUSED_SILENT') {
-      return null;
-    }
-    if (controlResult) {
-      return controlResult;
-    }
+    if (controlResult === 'PAUSED_SILENT') return null;
+    if (controlResult) return controlResult;
 
-    // 3. Vérification du Quota / Limite de messages gratuits (20 messages d'essai)
-    if (this.usedMessagesCount >= this.totalCredits) {
-      console.warn(`[Quota Expiré] Limite de ${this.totalCredits} messages atteinte.`);
-      const paymentUrl = this.config.paymentUrl || "https://mon-service.com/recharge";
-      return `⚠️ Votre période d'essai de ${this.freeCredits} messages gratuits est terminée.\n\n👉 Pour recharger votre assistant IA (dès 500 FCFA pour 100 messages), cliquez ici : ${paymentUrl}\n\nPaiement instantané par Orange Money & MTN MoMo.`;
+    // 3. Vérification des crédits de la boutique
+    if (activeConfig.credits_remaining !== undefined && activeConfig.credits_remaining <= 0) {
+      const paymentUrl = `https://plateforme-bots-multicanal-production.up.railway.app/recharge?shop=${activeConfig.slug || 'default'}`;
+      return `⚠️ L'assistant IA de ${activeConfig.businessName || 'cette boutique'} a épuisé ses crédits d'essai gratuits.\n\n👉 Pour recharger l'assistant (dès 500 FCFA), cliquez ici : ${paymentUrl}`;
     }
 
-    // Incrémentation du compteur de messages consommés
-    this.usedMessagesCount++;
+    // Décrémenter les crédits si applicable
+    if (activeConfig.credits_remaining !== undefined) {
+      activeConfig.credits_remaining--;
+      activeConfig.total_messages_processed = (activeConfig.total_messages_processed || 0) + 1;
+    }
 
-    // 4. Enregistrer le message de l'utilisateur
+    // 4. Enregistrer le message utilisateur
     this.sessionManager.recordUserMessage(senderKey, cleanMessage);
 
-    // 5. Construire le prompt enrichi (concis, avec le nom du client)
-    let systemPrompt = KnowledgeBase.buildEnhancedSystemPrompt(this.config, platform);
-    
-    // Consignes strictes de style court et appel par le prénom
+    // 5. Construire le prompt enrichi avec les informations de la boutique choisie
+    let systemPrompt = KnowledgeBase.buildEnhancedSystemPrompt(activeConfig, platform);
     systemPrompt += `\n\n### ⚡ DIRECTIVES DE RÉPONSE EXPRESS :`;
-    systemPrompt += `\n- Le client s'appelle : "${userName}". Salue-le chaleureusement par son prénom ou nom si approprié.`;
-    systemPrompt += `\n- **LONGUEUR MAXIMALE : 2 à 3 phrases courtes maximum**. Fais des messages aérés, faciles et rapides à lire sur smartphone. Évite les longs pavés !`;
-    systemPrompt += `\n- Termine souvent par une question d'engagement simple (ex: "En quelle classe est votre enfant ?", "Quelle taille souhaitez-vous ?").`;
+    systemPrompt += `\n- Le client s'appelle : "${userName}". Salue-le chaleureusement par son nom si opportun.`;
+    systemPrompt += `\n- **LONGUEUR MAXIMALE : 2 à 3 phrases courtes maximum**. Aéré, direct et facile à lire sur smartphone.`;
+    systemPrompt += `\n- Réponds UNIQUEMENT sur les produits et conditions de ${activeConfig.businessName || 'notre service'}.`;
 
     // 6. Préparer les messages pour DeepSeek
     const history = this.sessionManager.getFormattedHistory(senderKey);
@@ -92,20 +105,19 @@ export class AiBrain {
 
     try {
       const result = await this.engine.generateResponse(messages, {
-        apiKey: contextOverrides.apiKey || this.config.apiKey,
-        temperature: this.config.temperature ?? 0.6,
-        maxTokens: 250 // Réponses 2 fois plus courtes et percutantes
+        apiKey: contextOverrides.apiKey || activeConfig.apiKey,
+        temperature: 0.6,
+        maxTokens: 250
       });
 
-      const replyText = result.text || `Merci pour votre message ${userName} ! Comment puis-je vous aider ? ✨`;
+      const replyText = result.text || `Bonjour ${userName} ! Comment puis-je vous renseigner chez ${activeConfig.businessName || 'nous'} ? 😊`;
       this.sessionManager.recordAssistantMessage(senderKey, replyText);
-
       return replyText;
     } catch (error) {
-      console.error(`[AiBrain] Erreur pour ${senderKey} (${platform}) :`, error);
-      const fallbackReply = `Bonjour ${userName} ! Je suis Sarah de YE (Almanach). Comment puis-je vous aider aujourd'hui ? 😊`;
-      this.sessionManager.recordAssistantMessage(senderKey, fallbackReply);
-      return fallbackReply;
+      console.error(`[AiBrain] Erreur pour ${senderKey} :`, error);
+      const fallback = `Bonjour ${userName} ! Bienvenue chez ${activeConfig.businessName || 'nous'}. Comment puis-je vous aider ? ✨`;
+      this.sessionManager.recordAssistantMessage(senderKey, fallback);
+      return fallback;
     }
   }
 

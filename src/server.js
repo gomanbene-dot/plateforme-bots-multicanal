@@ -186,7 +186,77 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 7. CRÉATION DE PAIEMENT PAYMOONEY (POST /api/paymooney/create-payment)
+  // 7. INSCRIPTION AUTONOME DU COMMERÇANT (POST /api/merchants/register)
+  if (req.method === 'POST' && url.pathname === '/api/merchants/register') {
+    const body = await parseJsonBody(req);
+    const businessName = body.businessName || 'Ma Boutique';
+    const managerPhone = body.managerPhone || '';
+    const city = body.city || 'Yaoundé';
+    const deliveryTerms = body.deliveryTerms || 'Livraison disponible';
+    const catalog = body.catalog || [];
+    const customPrompt = body.customPrompt || '';
+
+    // Génération automatique du slug unique (ex: "kfashion_douala")
+    const rawSlug = businessName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 25);
+    const slug = `${rawSlug}_${Math.floor(100 + Math.random() * 900)}`;
+
+    const merchantData = {
+      businessName,
+      managerPhone,
+      city,
+      deliveryTerms,
+      catalog,
+      systemPrompt: customPrompt || `Tu es le conseiller commercial dynamique de "${businessName}" à ${city}. Présente les articles, informe sur la livraison (${deliveryTerms}) et prends les commandes.`,
+      credits_remaining: 20,
+      total_messages_processed: 0
+    };
+
+    // Enregistrement en mémoire instantanée
+    yeBrain.registerMerchant(slug, merchantData);
+
+    // Enregistrement asynchrone dans Supabase si configuré
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        fetch(`${process.env.SUPABASE_URL}/rest/v1/merchants`, {
+          method: 'POST',
+          headers: {
+            'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            business_name: businessName,
+            manager_phone: managerPhone,
+            city: city,
+            delivery_terms: deliveryTerms,
+            catalog: catalog,
+            system_prompt: merchantData.systemPrompt,
+            credits_remaining: 20
+          })
+        }).catch(err => console.warn('[Supabase Insert Error]:', err.message));
+      } catch (e) {}
+    }
+
+    const host = req.headers.host || 'plateforme-bots-multicanal-production.up.railway.app';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      success: true,
+      slug: slug,
+      businessName: businessName,
+      links: {
+        telegram: `https://t.me/Alnafisnolan_bot?start=${slug}`,
+        webChat: `${protocol}://${host}/?shop=${slug}`,
+        qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://t.me/Alnafisnolan_bot?start=${slug}`
+      },
+      message: "Boutique configurée avec succès ! Vos 20 messages d'essai sont activés."
+    }));
+    return;
+  }
+
+  // 8. CRÉATION DE PAIEMENT PAYMOONEY (POST /api/paymooney/create-payment)
   if (req.method === 'POST' && url.pathname === '/api/paymooney/create-payment') {
     const body = await parseJsonBody(req);
     const packId = body.packId || 'pack_500';
@@ -201,18 +271,15 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 8. WEBHOOK DE CONFIRMATION PAYMOONEY (POST /webhook/paymooney)
+  // 9. WEBHOOK DE CONFIRMATION PAYMOONEY (POST /webhook/paymooney)
   if (req.method === 'POST' && url.pathname === '/webhook/paymooney') {
     const body = await parseJsonBody(req);
     console.log('[PayMooney Webhook Reçu] :', body);
 
-    // Validation du statut de paiement
     if (body && (body.status === 'success' || body.response === 'success' || body.payment_status === 'COMPLETED')) {
       const itemRef = body.item_ref || body.ref_payment;
       console.log(`[PayMooney] Paiement confirmé pour la référence : ${itemRef}`);
-      
-      // Recharger les crédits de la boutique active
-      yeBrain.addCredits(500); // Recharge automatique
+      yeBrain.addCredits(500);
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -220,7 +287,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 9. SANTÉ DU SYSTÈME (GET /health)
+  // 10. SANTÉ DU SYSTÈME (GET /health)
   if (url.pathname === '/health' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'healthy', uptime: process.uptime(), timestamp: Date.now() }));

@@ -747,24 +747,66 @@
       document.getElementById('configModal').style.display = 'none';
     }
 
-    function saveCustomConfig() {
-      const name = document.getElementById('cfg-name').value || 'Ma Super Boutique';
-      const city = document.getElementById('cfg-city').value || 'Douala';
-      const products = document.getElementById('cfg-products').value;
-      const delivery = document.getElementById('cfg-delivery').value;
-      const apiKey = document.getElementById('cfg-key').value;
+    async function saveCustomConfig() {
+      const name = document.getElementById('cfg-name').value.trim() || 'Ma Boutique';
+      const city = document.getElementById('cfg-city').value.trim() || 'Douala';
+      const products = document.getElementById('cfg-products').value.trim();
+      const delivery = document.getElementById('cfg-delivery').value.trim();
+      const phone = document.getElementById('cfg-phone')?.value.trim() || '';
 
-      customConfig = {
-        businessName: name,
-        city: city,
-        deliveryFees: delivery,
-        customKnowledge: products,
-        apiKey: apiKey
-      };
+      if (!name) {
+        alert("Veuillez saisir le nom de votre boutique !");
+        return;
+      }
 
-      document.getElementById('custom-profile-title').innerText = name;
-      closeConfigModal();
-      selectProfile('custom');
+      try {
+        const res = await fetch('/api/merchants/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName: name,
+            city: city,
+            managerPhone: phone,
+            deliveryTerms: delivery,
+            customPrompt: `Tu es le conseiller de vente chaleureux et dynamique de la boutique "${name}" située à ${city}. Présente les articles suivants, renseigne sur les prix et la livraison (${delivery}) et prends les commandes :\n${products}`
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          // Affichage du résultat avec les liens personnalisés
+          document.getElementById('configModal').innerHTML = `
+            <div class="modal-box" style="text-align: center;">
+              <div style="font-size: 45px; margin-bottom: 10px;">🎉</div>
+              <h2 style="font-size: 20px; color: var(--wa-green); margin-bottom: 8px;">Félicitations, votre Bot est Prêt !</h2>
+              <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Votre assistant pour <strong>"${data.businessName}"</strong> est activé avec 20 messages gratuits.</p>
+
+              <div style="background: #1a233a; border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: left;">
+                <label style="font-size: 11px; color: var(--wa-green); font-weight: 700; text-transform: uppercase;">📱 Votre Lien Telegram Personnalisé :</label>
+                <div style="display: flex; gap: 8px; margin-top: 6px;">
+                  <input type="text" readonly value="${data.links.telegram}" class="form-control" style="background: #0f172a; font-family: monospace; font-size: 12px;" id="ready-tg-link">
+                  <button class="quick-chip" onclick="navigator.clipboard.writeText('${data.links.telegram}'); alert('Lien copié dans le presse-papier !');" style="background: var(--accent); color: white; white-space: nowrap;">Copier 📋</button>
+                </div>
+              </div>
+
+              <div style="margin-bottom: 20px;">
+                <img src="${data.links.qrCodeUrl}" alt="QR Code" style="width: 140px; height: 140px; border-radius: 10px; background: white; padding: 6px;">
+                <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Scannez pour tester immédiatement sur votre téléphone</p>
+              </div>
+
+              <a href="${data.links.telegram}" target="_blank" class="btn-action" style="display: block; text-decoration: none; padding: 12px; font-size: 14px; background: #25D366; color: black; margin-bottom: 10px;">
+                Tester mon Bot sur Telegram 🚀
+              </a>
+
+              <button class="quick-chip" onclick="location.reload()" style="background: #334155; color: white; width: 100%;">Fermer et retourner au simulateur</button>
+            </div>
+          `;
+        } else {
+          alert("Erreur lors de l'enregistrement : " + (data.error || "Réessayez"));
+        }
+      } catch (err) {
+        alert("Erreur réseau : impossible d'enregistrer.");
+      }
     }
 
     // Init
