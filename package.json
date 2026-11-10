@@ -4,9 +4,13 @@
   "description": "Plateforme universelle de Bots IA Omnicanaux (WhatsApp, Messenger, Instagram, Telegram) pour YE et commerçants",
   "main": "src/server.js",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node --test channels.test.mjs inbox.test.mjs analytics.test.mjs verification.test.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc14",
