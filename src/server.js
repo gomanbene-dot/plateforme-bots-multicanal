@@ -135,7 +135,7 @@ const server = http.createServer(async (req, res) => {
     const body=req.parsedBody,config=yeBrain.getMerchantConfig(body.shop);
     if(!config){res.writeHead(404);res.end('Entreprise inconnue');return;}
     if(body.logoUrl && !/^https:\/\//.test(body.logoUrl)){res.writeHead(400);res.end('Le logo doit utiliser HTTPS');return;}
-    for(const key of ['businessName','botName','supportEmail','logoUrl','customDocs']){
+    for(const key of ['businessName','botName','supportEmail','logoUrl','customDocs','currentCampaign']){
       if(typeof body[key]==='string')config[key]=body[key].slice(0,key==='customDocs'?12000:2048);
     }
     if(body.shop!=='ye_almanach')config.systemPrompt='Tu es '+config.botName+', assistant virtuel de '+config.businessName+'. Réponds uniquement avec les informations de cette entreprise et propose son contact si elles manquent.';
@@ -178,6 +178,19 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404);
       res.end();
     }
+    return;
+  }
+
+  // 1.A.2 CHARTE VISUELLE COMMUNE (GET /assets/*) — liste blanche de fichiers, aucun chemin libre
+  if (url.pathname.startsWith('/assets/') && req.method === 'GET') {
+    const name = url.pathname.slice('/assets/'.length);
+    const types = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
+    const ext = path.extname(name);
+    if (!/^[a-z0-9-]+\.(css|js|svg)$/.test(name)) { res.writeHead(404); res.end(); return; }
+    const file = path.join(__dirname, '..', 'public', 'assets', name);
+    if (!fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': types[ext], 'Cache-Control': 'no-cache' });
+    res.end(fs.readFileSync(file));
     return;
   }
 
@@ -523,6 +536,31 @@ const server = http.createServer(async (req, res) => {
     const list = yeBrain.getMerchantConversations(shopSlug);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, count: list.length, conversations: list }));
+    return;
+  }
+
+  // 7.A. ÉTAT DES RÉSEAUX CONNECTÉS (GET /api/channels)
+  if (url.pathname === '/api/channels' && req.method === 'GET') {
+    const shopSlug = url.searchParams.get('shop');
+    if (!yeBrain.getMerchantConfig(shopSlug)) { res.writeHead(404); res.end('{}'); return; }
+    const connected = {};
+    for (const [key, row] of Object.entries(channelRoutes)) {
+      const [platform] = key.split(':');
+      if (row.merchantSlug === shopSlug && process.env[row.tokenEnv]) connected[platform] = true;
+    }
+    const isYe = shopSlug === yeEducationConfig.id;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({
+      success: true,
+      admin: !!actor.admin,
+      channels: {
+        whatsapp: { connected: !!connected.whatsapp || (isYe && whatsappBaileys.getStatus().status === 'CONNECTED'), mode: connected.whatsapp ? 'api' : (isYe ? 'qr' : null) },
+        messenger: { connected: !!connected.messenger },
+        instagram: { connected: !!connected.instagram },
+        telegram: { connected: isYe && !!process.env.TELEGRAM_BOT_TOKEN && !!process.env.TELEGRAM_WEBHOOK_SECRET },
+        web: { connected: true, link: `/?shop=${encodeURIComponent(shopSlug)}` }
+      }
+    }));
     return;
   }
 

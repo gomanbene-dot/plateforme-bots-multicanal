@@ -1,896 +1,267 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head><script>
-const nativeFetch=window.fetch.bind(window);
-window.fetch=async function(input,options={}){
- const target=new URL(typeof input==='string'?input:input.url,location.href);
- if(target.origin===location.origin && target.pathname.startsWith('/api/')){
-  const token=sessionStorage.getItem('bot-access');
-  if(!token){location.href='/connexion?next='+encodeURIComponent(location.pathname+location.search);throw Error('Connexion requise');}
-  options.headers=new Headers(options.headers);options.headers.set('Authorization','Bearer '+token);
- }
- const response=await nativeFetch(input,options);
- if(response.status===401){sessionStorage.removeItem('bot-access');location.href='/connexion';}
- return response;
-};
-</script>
+<head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simulateur Bot IA Omnicanal (WhatsApp, Telegram, Messenger)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Tester mon assistant</title>
+  <meta name="theme-color" content="#087a5e">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js"></script>
   <style>
-    :root {
-      --wa-green: #25D366;
-      --wa-dark-green: #075E54;
-      --wa-bg: #EFEAE2;
-      --wa-chat-bg: #0b141a;
-      --wa-bubble-out: #005c4b;
-      --wa-bubble-in: #202c33;
-      --bg-dark: #090d16;
-      --card-bg: #131b2e;
-      --card-border: #1e293b;
-      --accent: #6366f1;
-      --accent-hover: #4f46e5;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-    }
+    .top { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+    .top .brand { flex: 1; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 24px 48px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 28px; align-items: start; }
+    .intro h1 { font-size: 28px; letter-spacing: -.025em; margin-bottom: 8px; }
+    .intro > p { color: var(--text-2); font-size: 15px; max-width: 520px; margin-bottom: 24px; }
+    .nets { display: flex; gap: 8px; flex-wrap: wrap; }
+    .nets button { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 8px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); font-weight: 600; font-size: 13px; cursor: pointer; color: var(--text-2); }
+    .nets button[aria-pressed="true"] { border-color: var(--brand); color: var(--text); box-shadow: inset 0 0 0 1px var(--brand); background: var(--brand-soft); }
+    .nets .net { width: 22px; height: 22px; border-radius: 7px; font-size: 11px; }
+    .suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+    .suggest button { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 7px 12px; font-size: 13px; cursor: pointer; color: var(--text); text-align: left; }
+    .suggest button:hover { border-color: var(--brand); background: var(--brand-soft); }
+    .section-label { font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; margin: 24px 0 10px; }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Plus Jakarta Sans', sans-serif;
-    }
+    .chat { position: sticky; top: 84px; border-radius: 24px; overflow: hidden; border: 1px solid var(--border); background: var(--bg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; height: min(720px, calc(100dvh - 120px)); }
+    .chat-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+    .chat-head .n { font-weight: 700; font-size: 15px; }
+    .chat-head .s { font-size: 12px; color: var(--success); display: flex; align-items: center; gap: 6px; }
+    .chat-head > div { flex: 1; min-width: 0; }
+    .msgs { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .bubble { max-width: 84%; padding: 9px 13px; border-radius: 16px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: var(--shadow-sm); }
+    .bubble .at { display: block; font-size: 10.5px; color: var(--text-3); text-align: right; margin-top: 3px; }
+    .bubble.user { align-self: flex-end; background: var(--brand); color: var(--on-brand); border-bottom-right-radius: 5px; }
+    .bubble.user .at { color: inherit; opacity: .7; }
+    .bubble.bot { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
+    .bubble.team { align-self: flex-start; background: var(--bubble-agent); border-bottom-left-radius: 5px; }
+    .bubble.team::before { content: 'Équipe'; display: block; font-size: 11px; font-weight: 700; color: var(--brand-ink); margin-bottom: 2px; }
+    .typing { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; display: none; gap: 4px; }
+    .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); animation: blink 1.2s infinite; }
+    .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
+    .chat form { display: flex; gap: 8px; padding: 12px; background: var(--surface); border-top: 1px solid var(--border); }
+    .chat form .input { border-radius: 999px; height: 44px; padding: 0 18px; }
+    .chat form .btn { width: 44px; height: 44px; padding: 0; border-radius: 50%; }
 
-    body {
-      background: var(--bg-dark);
-      color: var(--text-main);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    header {
-      background: rgba(19, 27, 46, 0.8);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--card-border);
-      padding: 16px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-
-    .logo-badge {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .logo-badge .icon {
-      width: 40px;
-      height: 40px;
-      background: linear-gradient(135deg, #25D366, #128C7E);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
-    }
-
-    .logo-badge h1 {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-
-    .logo-badge span {
-      font-size: 12px;
-      color: var(--wa-green);
-      display: block;
-      font-weight: 600;
-    }
-
-    .main-container {
-      display: grid;
-      grid-template-columns: 360px 1fr;
-      gap: 24px;
-      max-width: 1300px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 24px;
-      flex: 1;
-    }
-
-    @media (max-width: 960px) {
-      .main-container {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* Left Control Panel */
-    .control-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .panel-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 20px;
-    }
-
-    .panel-title {
-      font-size: 14px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .profile-tabs {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .profile-btn {
-      background: #1a233a;
-      border: 1px solid transparent;
-      padding: 12px 14px;
-      border-radius: 12px;
-      color: var(--text-main);
-      cursor: pointer;
-      text-align: left;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .profile-btn:hover {
-      background: #232f4e;
-      border-color: #3b4d75;
-    }
-
-    .profile-btn.active {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(37, 211, 102, 0.15));
-      border-color: var(--accent);
-      box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
-    }
-
-    .profile-btn .icon {
-      font-size: 24px;
-    }
-
-    .profile-btn .info h4 {
-      font-size: 14px;
-      font-weight: 700;
-    }
-
-    .profile-btn .info p {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    /* Channel Selector */
-    .channel-selector {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-    }
-
-    .channel-btn {
-      background: #1a233a;
-      border: 1px solid transparent;
-      border-radius: 10px;
-      padding: 10px 6px;
-      color: var(--text-muted);
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s;
-    }
-
-    .channel-btn.active {
-      color: white;
-      border-color: var(--wa-green);
-      background: #0f2722;
-    }
-
-    /* Quick Test Prompts */
-    .quick-prompts {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 10px;
-    }
-
-    .quick-chip {
-      background: #1e293b;
-      border: 1px solid #334155;
-      padding: 6px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-      color: #cbd5e1;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .quick-chip:hover {
-      background: var(--accent);
-      color: white;
-      border-color: var(--accent);
-    }
-
-    /* Phone Mockup Area */
-    .phone-wrapper {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .smartphone {
-      width: 100%;
-      max-width: 440px;
-      height: 740px;
-      background: var(--wa-chat-bg);
-      border-radius: 36px;
-      border: 10px solid #1f293d;
-      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px #334155;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .phone-header {
-      background: #202c33;
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      z-index: 10;
-    }
-
-    .avatar {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      background: #374151;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-    }
-
-    .header-info {
-      flex: 1;
-    }
-
-    .header-info h3 {
-      font-size: 15px;
-      font-weight: 700;
-      color: #e9edef;
-    }
-
-    .header-info p {
-      font-size: 12px;
-      color: var(--wa-green);
-    }
-
-    .chat-messages {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0);
-      background-size: 20px 20px;
-    }
-
-    .message {
-      max-width: 82%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 13.5px;
-      line-height: 1.45;
-      position: relative;
-      word-wrap: break-word;
-      white-space: pre-wrap;
-    }
-
-    .message.user {
-      align-self: flex-end;
-      background: var(--wa-bubble-out);
-      color: #e9edef;
-      border-bottom-right-radius: 2px;
-    }
-
-    .message.bot {
-      align-self: flex-start;
-      background: var(--wa-bubble-in);
-      color: #d1d7db;
-      border-bottom-left-radius: 2px;
-    }
-
-    .message .time {
-      font-size: 10px;
-      color: rgba(255, 255, 255, 0.5);
-      text-align: right;
-      margin-top: 4px;
-      display: block;
-    }
-
-    .typing-indicator {
-      display: none;
-      align-self: flex-start;
-      background: var(--wa-bubble-in);
-      padding: 10px 14px;
-      border-radius: 12px;
-      gap: 4px;
-      align-items: center;
-    }
-
-    .typing-dot {
-      width: 6px;
-      height: 6px;
-      background: #8696a0;
-      border-radius: 50%;
-      animation: typing 1.4s infinite ease-in-out both;
-    }
-
-    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-
-    @keyframes typing {
-      0%, 80%, 100% { transform: scale(0); }
-      40% { transform: scale(1); }
-    }
-
-    .chat-input-area {
-      background: #202c33;
-      padding: 10px 12px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .chat-input {
-      flex: 1;
-      background: #2a3942;
-      border: none;
-      outline: none;
-      padding: 10px 14px;
-      border-radius: 20px;
-      color: white;
-      font-size: 14px;
-    }
-
-    .send-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--wa-green);
-      border: none;
-      color: #0b141a;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      transition: transform 0.15s;
-    }
-
-    .send-btn:active {
-      transform: scale(0.92);
-    }
-
-    /* Modal / Customizer */
-    .config-modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(6px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-    }
-
-    .modal-box {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      width: 90%;
-      max-width: 580px;
-      max-height: 85vh;
-      overflow-y: auto;
-      padding: 24px;
-    }
-
-    .form-group {
-      margin-bottom: 14px;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      text-transform: uppercase;
-    }
-
-    .form-control {
-      width: 100%;
-      background: #1a233a;
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 10px 12px;
-      color: white;
-      font-size: 13px;
-    }
-
-    .btn-action {
-      background: var(--accent);
-      color: white;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 10px;
-      font-weight: 700;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 10px;
+    dialog { border: 0; padding: 0; border-radius: 18px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg); width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); }
+    dialog::backdrop { background: rgba(16, 24, 40, .45); backdrop-filter: blur(2px); }
+    .dlg-head { padding: 20px 22px 0; display: flex; justify-content: space-between; gap: 12px; }
+    .dlg-head p { color: var(--text-2); font-size: 13px; margin-top: 2px; }
+    .dlg-body { padding: 18px 22px; overflow-y: auto; max-height: calc(100dvh - 200px); }
+    .drop { border: 1.5px dashed var(--border-strong); border-radius: 12px; padding: 18px; text-align: center; color: var(--text-2); font-size: 13px; cursor: pointer; }
+    .drop:hover { border-color: var(--brand); background: var(--brand-soft); }
+    .files { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .files div { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; background: var(--surface-2); padding: 7px 10px; border-radius: 8px; }
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; padding: 20px 16px 32px; }
+      .chat { position: static; height: 72dvh; }
+      .top { padding: 12px 16px; }
+      .top .hide-sm { display: none; }
     }
   </style>
 </head>
 <body>
-
-  <header>
-    <div class="logo-badge">
-      <div class="icon">🤖</div>
-      <div>
-        <h1>Bot IA Omnicanal Pro</h1>
-        <span>Moteur DeepSeek + Multi-Canaux Connectés</span>
-      </div>
-    </div>
-    <div>
-      <button class="quick-chip" onclick="openConfigModal()" style="background: var(--accent); color: white; border: none; font-weight: 700; padding: 8px 14px;">
-        ⚙️ Configurer ma Boutique
-      </button>
-    </div>
+  <header class="top">
+    <div class="brand"><span class="brand-mark" data-icon="chat"></span> Assistant IA</div>
+    <button class="btn btn-sm hide-sm" id="create-btn" hidden>Nouvelle entreprise</button>
+    <a class="btn btn-sm" id="dash-link" href="/dashboard">Espace entreprise</a>
+    <button class="btn btn-ghost btn-sm icon-btn" id="theme-btn" aria-label="Changer de thème"></button>
   </header>
 
-  <div class="main-container">
-    <!-- Panneau de Contrôle Gauche -->
-    <div class="control-panel">
-      
-      <div class="panel-card">
-        <div class="panel-title">🎯 Profil Commercial Actif</div>
-        <div class="profile-tabs">
-          <button class="profile-btn active" id="btn-profile-ye" onclick="selectProfile('ye')">
-            <div class="icon">🎓</div>
-            <div class="info">
-              <h4>YE (Répétiteur Virtuel)</h4>
-              <p>Vente d'abonnements scolaires</p>
-            </div>
-          </button>
+  <div class="wrap">
+    <section class="intro">
+      <span class="badge badge-brand" style="margin-bottom:14px">Mode test</span>
+      <h1>Parlez à votre assistant comme le ferait un client.</h1>
+      <p>Les messages de test arrivent aussi dans vos conversations : vous pouvez y reprendre la main et voir votre réponse apparaître ici.</p>
 
-          <button class="profile-btn" id="btn-profile-boutique" onclick="selectProfile('boutique')">
-            <div class="icon">👗</div>
-            <div class="info">
-              <h4>Boutique Élégance (Mode)</h4>
-              <p>Catalogue, tailles & commandes</p>
-            </div>
-          </button>
+      <div class="section-label">Réseau simulé</div>
+      <div class="nets" id="nets" role="group" aria-label="Réseau simulé"></div>
 
-          <button class="profile-btn" id="btn-profile-custom" onclick="openConfigModal()">
-            <div class="icon">✨</div>
-            <div class="info">
-              <h4 id="custom-profile-title">Ma Boutique Personnalisée</h4>
-              <p>Cliquez pour configurer vos produits</p>
-            </div>
-          </button>
-        </div>
+      <div class="section-label">Questions à essayer</div>
+      <div class="suggest" id="suggest"></div>
+
+      <div class="section-label">Bon à savoir</div>
+      <div class="callout callout-info"><span data-icon="info"></span><div>Chaque réponse de test consomme un crédit, comme une vraie conversation. Pour modifier ce que sait l'assistant, ouvrez <a id="assistant-link" href="/dashboard#assistant">Mon assistant</a>.</div></div>
+    </section>
+
+    <section class="chat" aria-label="Discussion de test">
+      <div class="chat-head">
+        <span class="avatar" id="bot-avatar">?</span>
+        <div><div class="n" id="bot-name">Assistant</div><div class="s"><span class="dot"></span> En ligne · répond en quelques secondes</div></div>
+        <button class="btn btn-ghost btn-sm icon-btn" id="clear-btn" title="Nouvelle conversation" aria-label="Nouvelle conversation" data-icon="refresh"></button>
       </div>
-
-      <div class="panel-card">
-        <div class="panel-title">📱 Canal Réseau Social Simulé</div>
-        <div class="channel-selector">
-          <button class="channel-btn active" id="chan-whatsapp" onclick="setChannel('whatsapp')">
-            <span style="font-size: 18px;">🟢</span> WhatsApp
-          </button>
-          <button class="channel-btn" id="chan-telegram" onclick="setChannel('telegram')">
-            <span style="font-size: 18px;">🔵</span> Telegram
-          </button>
-          <button class="channel-btn" id="chan-instagram" onclick="setChannel('instagram')">
-            <span style="font-size: 18px;">🟣</span> Instagram
-          </button>
-          <button class="channel-btn" id="chan-messenger" onclick="setChannel('messenger')">
-            <span style="font-size: 18px;">🔷</span> Messenger
-          </button>
-        </div>
-      </div>
-
-      <div class="panel-card">
-        <div class="panel-title">⚡ Questions Types (Test Rapide)</div>
-        <div class="quick-prompts" id="quick-prompts-container">
-          <!-- Dynamically populated -->
-        </div>
-      </div>
-
-      <div class="panel-card" style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
-        <strong style="color: white;">ℹ️ Informations Webhooks :</strong><br>
-        • WhatsApp : <code>/webhook/whatsapp</code><br>
-        • Telegram : <code>/webhook/telegram</code><br>
-        • Instagram / Messenger : <code>/webhook/instagram</code>
-      </div>
-
-    </div>
-
-    <!-- Téléphone Mobile Mockup -->
-    <div class="phone-wrapper">
-      <div class="smartphone">
-        <div class="phone-header">
-          <div class="avatar" id="bot-avatar">🤖</div>
-          <div class="header-info">
-            <h3 id="bot-name">Assistant virtuel YE</h3>
-            <p id="bot-status">Simulateur — connexion des réseaux à vérifier</p>
-          </div>
-          <button onclick="clearChat()" style="background: none; border: none; color: #8696a0; cursor: pointer; font-size: 18px;" title="Effacer la conversation">🗑️</button>
-        </div>
-
-        <div class="chat-messages" id="chat-box">
-          <!-- Messages will be injected here -->
-        </div>
-
-        <div class="typing-indicator" id="typing-indicator">
-          <div class="typing-dot"></div>
-          <div class="typing-dot"></div>
-          <div class="typing-dot"></div>
-        </div>
-
-        <form class="chat-input-area" onsubmit="handleUserSubmit(event)">
-          <input type="text" id="user-input" class="chat-input" placeholder="Écrivez un message comme un client..." autocomplete="off">
-          <button type="submit" class="send-btn">➤</button>
-        </form>
-      </div>
-    </div>
+      <div class="msgs" id="msgs" aria-live="polite"><div class="typing" id="typing"><span></span><span></span><span></span></div></div>
+      <form id="chat-form">
+        <input class="input" id="msg" autocomplete="off" placeholder="Écrivez comme un client…" aria-label="Votre message">
+        <button class="btn btn-primary" aria-label="Envoyer" data-icon="send"></button>
+      </form>
+    </section>
   </div>
 
-  <!-- Modal Personnalisation Commerçant -->
-  <div class="config-modal" id="configModal">
-    <div class="modal-box">
-      <h2 style="font-size: 18px; margin-bottom: 16px;">⚙️ Configurer votre Bot Commerçant</h2>
-      
-      <div class="form-group">
-        <label>Nom de l'entreprise ou boutique</label>
-        <input type="text" id="cfg-name" class="form-control" placeholder="Ex: Restaurant Le Délice / Clinique Santé Plus / Boutique K-Fashion">
-      </div>
-
-      <div class="form-group">
-        <label>Prénom & Titre de votre Assistant IA (Personnalisé)</label>
-        <input type="text" id="cfg-botname" class="form-control" placeholder="Ex: Chantal (Conseillère Vente), Alain (Chef Pizzeria), Mireille...">
-      </div>
-
-      <div class="form-group">
-        <label>Ville & Quartier</label>
-        <input type="text" id="cfg-city" class="form-control" placeholder="Ex: Douala, Akwa">
-      </div>
-
-      <div class="form-group">
-        <label>Produits, Tarifs ou Services (1 par ligne)</label>
-        <textarea id="cfg-products" class="form-control" rows="4" placeholder="Ex:&#10;- Pizza Royale : 6.000 FCFA&#10;- Burger Spécial : 3.500 FCFA&#10;- Jus naturel : 1.500 FCFA"></textarea>
-      </div>
-
-      <div class="form-group">
-        <label>Conditions de livraison / Horaires</label>
-        <input type="text" id="cfg-delivery" class="form-control" placeholder="Ex: Livraison 1.000 FCFA à Douala. Ouvert 7j/7 de 10h à 23h">
-      </div>
-
-      <div class="form-group">
-        <label>📄 Ajouter des Fichiers (PDF, Catalogue, Photos de produits)</label>
-        <div style="border: 2px dashed #334155; border-radius: 12px; padding: 16px; text-align: center; background: #0f172a; cursor: pointer;" onclick="document.getElementById('file-picker').click()">
-          <input type="file" id="file-picker" multiple accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx" style="display: none;" onchange="handleFileUpload(event)">
-          <div style="font-size: 28px; margin-bottom: 6px;">📁</div>
-          <div style="font-size: 13px; font-weight: 600; color: var(--text-main);">Cliquez pour choisir un PDF ou une Photo</div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">PDF, Photos JPEG/PNG, Brochures (L'IA lira le contenu)</div>
+  <!-- Création d'une entreprise (administrateur) -->
+  <dialog id="create-dlg">
+    <form id="create-form" method="dialog">
+      <div class="dlg-head"><div><h2>Nouvelle entreprise</h2><p>Crée l'espace du client et son assistant en une minute.</p></div><button type="button" class="btn btn-ghost btn-sm icon-btn" data-close aria-label="Fermer">✕</button></div>
+      <div class="dlg-body">
+        <div class="row">
+          <div class="field"><label for="c-name">Nom de l'entreprise</label><input class="input" id="c-name" required placeholder="Ex. Boutique K-Fashion"></div>
+          <div class="field"><label for="c-bot">Nom de l'assistant</label><input class="input" id="c-bot" placeholder="Ex. Chantal"></div>
         </div>
-        <div id="uploaded-files-list" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;"></div>
+        <div class="row">
+          <div class="field"><label for="c-city">Ville et quartier</label><input class="input" id="c-city" placeholder="Ex. Douala, Akwa"></div>
+          <div class="field"><label for="c-phone">Téléphone du gérant</label><input class="input" id="c-phone" type="tel" placeholder="+237…"></div>
+        </div>
+        <div class="field"><label for="c-products">Produits, services et prix</label><textarea class="textarea" id="c-products" rows="4" placeholder="Ex.&#10;Robe Wax : 15 000 FCFA&#10;Sac cuir : 22 000 FCFA"></textarea></div>
+        <div class="field"><label for="c-delivery">Livraison et horaires</label><input class="input" id="c-delivery" placeholder="Ex. Livraison 1 000 FCFA à Douala, ouvert 7j/7 de 9 h à 20 h"></div>
+        <div class="field" style="margin-bottom:0"><span class="label">Catalogue, menu ou photos (facultatif)</span>
+          <label class="drop" for="c-files">Touchez pour ajouter des fichiers (PDF, JPG, PNG)</label><input type="file" id="c-files" multiple accept=".pdf,.jpg,.jpeg,.png,.txt" hidden>
+          <div class="files" id="c-file-list"></div></div>
       </div>
+      <div class="card-foot"><button type="button" class="btn" data-close>Annuler</button><button class="btn btn-primary" id="c-submit" value="default">Créer l'entreprise</button></div>
+    </form>
+  </dialog>
 
-      <div style="display: flex; gap: 10px; margin-top: 20px;">
-        <button type="button" class="btn-action" onclick="saveCustomConfig()">Sauvegarder & Tester Immédiatement</button>
-        <button type="button" class="quick-chip" onclick="closeConfigModal()" style="background: #334155; color: white;">Fermer</button>
-      </div>
+  <dialog id="done-dlg">
+    <div class="dlg-head"><div><h2>Entreprise créée</h2><p id="done-sub"></p></div><button type="button" class="btn btn-ghost btn-sm icon-btn" data-close aria-label="Fermer">✕</button></div>
+    <div class="dlg-body">
+      <div class="callout callout-warning" style="margin-bottom:16px"><span data-icon="lock"></span><div><strong>Code d'accès du client — affiché une seule fois.</strong> Transmettez-le au gérant par un canal privé. Il lui permet de se connecter à son espace.</div></div>
+      <div class="field"><span class="label">Code d'accès</span><div class="copy-box"><span id="done-token"></span><button type="button" class="btn btn-sm" data-copy-from="done-token">Copier</button></div></div>
+      <div class="field"><span class="label">Espace entreprise</span><div class="copy-box"><span id="done-dash"></span><button type="button" class="btn btn-sm" data-copy-from="done-dash">Copier</button></div></div>
+      <div class="field" style="margin-bottom:0"><span class="label">Lien de discussion pour les clients</span><div class="copy-box"><span id="done-web"></span><button type="button" class="btn btn-sm" data-copy-from="done-web">Copier</button></div></div>
     </div>
-  </div>
+    <div class="card-foot"><button type="button" class="btn" data-close>Fermer</button><a class="btn btn-primary" id="done-test">Tester cet assistant</a></div>
+  </dialog>
 
   <script>
-    let currentProfile = 'ye';
-    let currentChannel = 'whatsapp';
-    let userId = 'user_' + Math.floor(Math.random() * 10000);
-    let customConfig = null;
+    const params = new URLSearchParams(location.search);
+    let shop = params.get('shop') || '';
+    let platform = 'whatsapp';
+    const userId = 'test_' + Math.random().toString(36).slice(2, 9);
+    const q = s => document.querySelector(s);
+    const NETS = [['whatsapp', 'WhatsApp', 'W'], ['messenger', 'Messenger', 'M'], ['instagram', 'Instagram', 'I'], ['telegram', 'Telegram', 'T'], ['web', 'Site web', 'W']];
+    const SUGGEST = ['Bonjour, vous vendez quoi ?', 'C’est combien ?', 'Vous livrez à Bastos ?', 'Je veux commander', 'Quels sont vos horaires ?', 'Je n’ai pas reçu ma commande'];
 
-    const quickQuestions = {
-      ye: [
-        "C'est quoi votre application ?",
-        "Combien coûte l'abonnement ?",
-        "Est-ce que ça marche sans connexion ?",
-        "Donnez-moi le lien de téléchargement",
-        "Avez-vous les cours de 3ème et Terminale ?"
-      ],
-      boutique: [
-        "Avez-vous des robes de soirée ?",
-        "C'est combien les Sneakers Nike ?",
-        "Faites-vous la livraison à Yaoundé ?",
-        "Je voudrais commander en taille 42",
-        "Quels sont vos moyens de paiement ?"
-      ],
-      custom: [
-        "Quels sont vos tarifs ?",
-        "Où êtes-vous situés ?",
-        "Comment passer commande ?",
-        "Avez-vous des disponibilités ?"
-      ]
+    document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon) + el.innerHTML);
+    q('#create-btn').innerHTML = icon('plus') + ' Nouvelle entreprise';
+    q('.drop').innerHTML = icon('upload') + '<div style="margin-top:6px">Touchez pour ajouter des fichiers (PDF, JPG, PNG)</div>';
+    const paintTheme = () => q('#theme-btn').innerHTML = icon(theme.current() === 'dark' ? 'sun' : 'moon');
+    q('#theme-btn').onclick = () => { theme.toggle(); paintTheme(); };
+    paintTheme();
+
+    q('#nets').innerHTML = NETS.map(([k, n, l]) => `<button type="button" data-net="${k}" aria-pressed="${k === platform}"><span class="net net-${k}">${l}</span>${n}</button>`).join('');
+    q('#nets').onclick = e => {
+      const b = e.target.closest('[data-net]'); if (!b) return;
+      platform = b.dataset.net;
+      q('#nets').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      reset();
     };
+    q('#suggest').innerHTML = SUGGEST.map(s => `<button type="button">${esc(s)}</button>`).join('');
+    q('#suggest').onclick = e => { const b = e.target.closest('button'); if (b) send(b.textContent); };
 
-    function selectProfile(profile) {
-      currentProfile = profile;
-      document.querySelectorAll('.profile-btn').forEach(btn => btn.classList.remove('active'));
-      document.getElementById('btn-profile-' + profile)?.classList.add('active');
-
-      const avatar = document.getElementById('bot-avatar');
-      const name = document.getElementById('bot-name');
-
-      if (profile === 'ye') {
-        avatar.innerText = '🎓';
-        name.innerText = 'Assistant virtuel YE';
-      } else if (profile === 'boutique') {
-        avatar.innerText = '👗';
-        name.innerText = 'Chantal (Élégance & Style)';
-      } else {
-        avatar.innerText = '💼';
-        name.innerText = customConfig?.name || 'Assistant Pro';
-      }
-
-      updateQuickPrompts();
-      clearChat();
-      injectWelcomeMessage();
+    function add(kind, text) {
+      const div = document.createElement('div');
+      div.className = 'bubble ' + kind;
+      div.textContent = text;
+      const at = document.createElement('span'); at.className = 'at';
+      at.textContent = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      div.appendChild(at);
+      q('#msgs').insertBefore(div, q('#typing'));
+      q('#msgs').scrollTop = q('#msgs').scrollHeight;
     }
-
-    function setChannel(channel) {
-      currentChannel = channel;
-      document.querySelectorAll('.channel-btn').forEach(btn => btn.classList.remove('active'));
-      document.getElementById('chan-' + channel)?.classList.add('active');
+    let botName = 'Assistant', bizName = '';
+    function reset() {
+      q('#msgs').querySelectorAll('.bubble').forEach(b => b.remove());
+      add('bot', `Bonjour, je suis ${botName}${bizName ? ', l’assistant de ' + bizName : ''}. Comment puis-je vous aider ?`);
     }
-
-    function updateQuickPrompts() {
-      const container = document.getElementById('quick-prompts-container');
-      const questions = quickQuestions[currentProfile] || quickQuestions.custom;
-      container.innerHTML = questions.map(q => `<button class="quick-chip" onclick="sendQuickMessage('${q.replace(/'/g, "\\'")}')">${q}</button>`).join('');
+    async function send(text) {
+      text = text.trim(); if (!text) return;
+      add('user', text); q('#msg').value = '';
+      q('#typing').style.display = 'flex'; q('#msgs').scrollTop = q('#msgs').scrollHeight;
+      const body = { message: text, userId, platform, userName: 'Client test' };
+      if (shop) body.shop = shop;
+      const { ok, data } = await api('/api/chat', body).catch(() => ({ ok: false, data: {} }));
+      q('#typing').style.display = 'none';
+      if (ok && data.reply) add('bot', data.reply);
+      else if (ok && data.humanMode) { /* l'équipe a la main : sa réponse arrivera par pollTeam() */ }
+      else add('bot', 'Le service est momentanément indisponible. Réessayez dans un instant.');
     }
+    q('#chat-form').onsubmit = e => { e.preventDefault(); send(q('#msg').value); };
+    q('#clear-btn').onclick = reset;
 
-    function injectWelcomeMessage() {
-      if (currentProfile === 'ye') {
-        addMessage("bot", "Bonjour. Je suis l’assistant virtuel YE. Je peux vous renseigner sur l’installation, les cours et les fiches de lecture.");
-      } else if (currentProfile === 'boutique') {
-        addMessage("bot", "Bonjour et bienvenue chez Élégance & Style ! 👗✨ Je suis Chantal, à votre service. Que recherchez-vous aujourd'hui ?");
-      } else {
-        addMessage("bot", `Bonjour et bienvenue chez ${customConfig?.name || 'notre établissement'} ! 😊 Comment puis-je vous renseigner aujourd'hui ?`);
-      }
-    }
-
-    function addMessage(sender, text) {
-      const chatBox = document.getElementById('chat-box');
-      const msgDiv = document.createElement('div');
-      msgDiv.className = `message ${sender}`;
-      
-      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      msgDiv.textContent = text;
-        const stamp=document.createElement('span');stamp.className='time';stamp.textContent=time;msgDiv.appendChild(stamp);
-      
-      chatBox.appendChild(msgDiv);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    function sendQuickMessage(text) {
-      document.getElementById('user-input').value = text;
-      handleUserSubmit(new Event('submit'));
-    }
-
-    async function handleUserSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('user-input');
-      const message = input.value.trim();
-      if (!message) return;
-
-      addMessage('user', message);
-      input.value = '';
-
-      const typing = document.getElementById('typing-indicator');
-      typing.style.display = 'flex';
-      document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
-
-      try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: userId,
-            message: message,
-            botType: currentProfile,
-            platform: currentChannel,
-            customConfig: customConfig
-          })
-        });
-
-        const data = await res.json();
-        typing.style.display = 'none';
-        
-        if (data && data.reply) {
-          addMessage('bot', data.reply);
-        } else if (data && data.humanMode) {
-          // Un membre de l'équipe a repris la conversation : sa réponse arrivera via pollTeamReplies()
-        } else {
-          addMessage('bot', "Désolé, une petite erreur est survenue.");
-        }
-      } catch (err) {
-        typing.style.display = 'none';
-        addMessage('bot', "Erreur de communication avec le serveur.");
-      }
-    }
-
-    // Réponses envoyées par l'équipe depuis la boîte de réception unifiée
-    async function pollTeamReplies() {
+    async function pollTeam() {
       if (document.hidden) return;
-      try {
-        const shop = new URLSearchParams(location.search).get('shop') || '';
-        const res = await fetch(`/api/chat/pending?platform=${encodeURIComponent(currentChannel)}&userId=${encodeURIComponent(userId)}${shop ? '&shop=' + encodeURIComponent(shop) : ''}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        for (const m of data.messages || []) addMessage('bot', m.text);
-      } catch (e) {}
+      const p = new URLSearchParams({ platform, userId }); if (shop) p.set('shop', shop);
+      const { ok, data } = await api('/api/chat/pending?' + p).catch(() => ({ ok: false }));
+      if (ok) for (const m of data.messages || []) add('team', m.text);
     }
-    setInterval(pollTeamReplies, 3000);
+    setInterval(pollTeam, 3000);
 
-    function clearChat() {
-      document.getElementById('chat-box').innerHTML = '';
-    }
+    (async () => {
+      const [{ ok, data }, ch] = await Promise.all([
+        api('/api/merchants/details' + (shop ? '?shop=' + encodeURIComponent(shop) : '')),
+        api('/api/channels' + (shop ? '?shop=' + encodeURIComponent(shop) : ''))
+      ]);
+      if (ok) {
+        const m = data.merchant || {};
+        if (!shop) shop = m.slug || m.id || '';
+        botName = m.botName || 'Assistant'; bizName = m.businessName || m.brandName || '';
+        q('#bot-name').textContent = botName + (bizName ? ' · ' + bizName : '');
+        const av = q('#bot-avatar');
+        av.innerHTML = /^https:\/\//.test(m.logoUrl || '') ? `<img src="${esc(m.logoUrl)}" alt="">` : esc((bizName || botName).slice(0, 2).toUpperCase());
+        document.title = 'Tester ' + botName;
+        q('#dash-link').href = '/dashboard?shop=' + encodeURIComponent(shop);
+        q('#assistant-link').href = '/dashboard?shop=' + encodeURIComponent(shop) + '#assistant';
+      }
+      if (ch.ok && ch.data.admin) q('#create-btn').hidden = false;
+      reset();
+    })();
 
-    function openConfigModal() {
-      document.getElementById('configModal').style.display = 'flex';
-    }
-
-    function closeConfigModal() {
-      document.getElementById('configModal').style.display = 'none';
-    }
-
-    let uploadedFiles = [];
-
-    async function handleFileUpload(event) {
-      const files = event.target.files;
-      if (!files || !files.length) return;
-
-      const listDiv = document.getElementById('uploaded-files-list');
-      
-      for (const file of files) {
+    // ---- Création d'entreprise (administrateur) ----
+    const dlg = q('#create-dlg'), done = q('#done-dlg');
+    document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
+    q('#create-btn').onclick = () => dlg.showModal();
+    const uploaded = [];
+    q('#c-files').onchange = e => {
+      for (const file of e.target.files) {
+        if (file.size > 700 * 1024) { toast(file.name + ' dépasse 700 Ko', 'error'); continue; }
         const reader = new FileReader();
-        reader.onload = async function(e) {
-          const base64 = e.target.result;
-          try {
-            const res = await fetch('/api/upload', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileName: file.name, fileBase64: base64 })
-            });
-            const data = await res.json();
-            if (data.success) {
-              uploadedFiles.push({ name: data.fileName, url: data.fileUrl });
-              const item = document.createElement('div');
-              item.style.cssText = "background: #1e293b; border: 1px solid var(--wa-green); border-radius: 8px; padding: 6px 10px; font-size: 12px; display: flex; align-items: center; justify-content: space-between;";
-              item.innerHTML = `<span>✅ <strong>${data.fileName}</strong> (${(file.size/1024).toFixed(1)} Ko)</span> <a href="${data.fileUrl}" target="_blank" style="color: var(--wa-green); font-size: 11px; text-decoration: none;">Voir 👁️</a>`;
-              listDiv.appendChild(item);
-            }
-          } catch (err) {
-            alert("Erreur lors de l'envoi de " + file.name);
-          }
+        reader.onload = async ev => {
+          const { ok, data } = await api('/api/upload', { fileName: file.name, fileBase64: ev.target.result }).catch(() => ({ ok: false }));
+          if (!ok || !data.success) { toast('Envoi impossible : ' + file.name, 'error'); return; }
+          uploaded.push({ name: data.fileName, url: data.fileUrl });
+          q('#c-file-list').insertAdjacentHTML('beforeend', `<div><span>${esc(data.fileName)}</span><a href="${esc(data.fileUrl)}" target="_blank" rel="noopener">Voir</a></div>`);
         };
         reader.readAsDataURL(file);
       }
-    }
-
-    async function saveCustomConfig() {
-      const name = document.getElementById('cfg-name').value.trim() || 'Ma Boutique';
-      const botName = document.getElementById('cfg-botname')?.value.trim() || 'Sarah';
-      const city = document.getElementById('cfg-city').value.trim() || 'Douala';
-      const products = document.getElementById('cfg-products').value.trim();
-      const delivery = document.getElementById('cfg-delivery').value.trim();
-      const phone = document.getElementById('cfg-phone')?.value.trim() || '';
-
-      if (!name) {
-        alert("Veuillez saisir le nom de votre boutique !");
-        return;
-      }
-
-      const docsSummary = uploadedFiles.map(f => `- Document / Photo officiel: ${f.name} -> Lien: ${f.url}`).join('\n');
-
-      try {
-        const res = await fetch('/api/merchants/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            businessName: name,
-            botName: botName,
-            city: city,
-            managerPhone: phone,
-            deliveryTerms: delivery,
-            customDocs: docsSummary,
-            customPrompt: `Tu es ${botName}, le conseiller de vente chaleureux et dynamique de la boutique "${name}" située à ${city}. Présente les articles suivants, renseigne sur les prix et la livraison (${delivery}) et prends les commandes :\n${products}\n\nDocuments et photos officiels disponibles :\n${docsSummary}`
-          })
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          // Affichage du résultat avec les liens personnalisés
-          document.getElementById('configModal').innerHTML = `
-            <div class="modal-box" style="text-align: center;">
-              <div style="font-size: 45px; margin-bottom: 10px;">🎉</div>
-              <h2 style="font-size: 20px; color: var(--wa-green); margin-bottom: 8px;">Félicitations, votre Bot est Prêt !</h2>
-              <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Votre assistant pour <strong>"${data.businessName}"</strong> est activé avec 20 messages gratuits.</p>
-
-              <div style="background: #1a233a; border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: left;">
-                <label style="font-size: 11px; color: var(--wa-green); font-weight: 700; text-transform: uppercase;">📱 Votre Lien Telegram Personnalisé :</label>
-                <div style="display: flex; gap: 8px; margin-top: 6px;">
-                  <input type="text" readonly value="${data.links.telegram}" class="form-control" style="background: #0f172a; font-family: monospace; font-size: 12px;" id="ready-tg-link">
-                  <button class="quick-chip" onclick="navigator.clipboard.writeText('${data.links.telegram}'); alert('Lien copié dans le presse-papier !');" style="background: var(--accent); color: white; white-space: nowrap;">Copier 📋</button>
-                </div>
-              </div>
-
-              <div style="margin-bottom: 20px;">
-                <img src="${data.links.qrCodeUrl}" alt="QR Code" style="width: 140px; height: 140px; border-radius: 10px; background: white; padding: 6px;">
-                <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Scannez pour tester immédiatement sur votre téléphone</p>
-              </div>
-
-              <a href="${data.links.telegram}" target="_blank" class="btn-action" style="display: block; text-decoration: none; padding: 12px; font-size: 14px; background: #25D366; color: black; margin-bottom: 10px;">
-                Tester mon Bot sur Telegram 🚀
-              </a>
-
-              <button class="quick-chip" onclick="location.reload()" style="background: #334155; color: white; width: 100%;">Fermer et retourner au simulateur</button>
-            </div>
-          `;
-        } else {
-          alert("Erreur lors de l'enregistrement : " + (data.error || "Réessayez"));
-        }
-      } catch (err) {
-        alert("Erreur réseau : impossible d'enregistrer.");
-      }
-    }
-
-    // Init
-    selectProfile('ye');
+    };
+    q('#create-form').onsubmit = async e => {
+      e.preventDefault();
+      const name = q('#c-name').value.trim();
+      if (!name) { q('#c-name').focus(); return; }
+      const botName = q('#c-bot').value.trim() || 'Sarah', city = q('#c-city').value.trim() || 'Douala';
+      const products = q('#c-products').value.trim(), delivery = q('#c-delivery').value.trim();
+      const docs = uploaded.map(f => `- ${f.name} : ${f.url}`).join('\n');
+      const btn = q('#c-submit'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Création…';
+      const { ok, data } = await api('/api/merchants/register', {
+        businessName: name, botName, city, managerPhone: q('#c-phone').value.trim(), deliveryTerms: delivery,
+        customDocs: [products, delivery, docs && 'Documents et photos :\n' + docs].filter(Boolean).join('\n\n'),
+        customPrompt: `Tu es ${botName}, l'assistant de vente chaleureux et efficace de "${name}" à ${city}. Réponds avec les informations de l'entreprise, renseigne sur les prix et la livraison et aide les clients à commander. Si une information manque, propose de transmettre la demande au gérant.`
+      }).catch(() => ({ ok: false, data: {} }));
+      btn.disabled = false; btn.textContent = 'Créer l’entreprise';
+      if (!ok || !data.success) { toast(data.error || 'Création impossible', 'error'); return; }
+      dlg.close();
+      q('#done-sub').textContent = `${data.businessName} est prête, avec 20 crédits offerts pour démarrer.`;
+      q('#done-token').textContent = data.accessToken;
+      q('#done-dash').textContent = data.links.dashboard;
+      q('#done-web').textContent = data.links.webChat;
+      q('#done-test').href = '/?shop=' + encodeURIComponent(data.slug);
+      done.showModal();
+    };
+    done.addEventListener('click', e => { const b = e.target.closest('[data-copy-from]'); if (b) copyText(q('#' + b.dataset.copyFrom).textContent); });
   </script>
 </body>
 </html>

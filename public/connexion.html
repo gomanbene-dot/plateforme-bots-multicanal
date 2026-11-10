@@ -1,1 +1,116 @@
-<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Accès à mon assistant</title><body style="font:18px system-ui;max-width:460px;margin:70px auto;padding:20px"><h1>Accéder à mon assistant</h1><p>Saisissez le code privé remis par le propriétaire de la plateforme.</p><form id="login"><label>Code d’accès <input id="token" type="password" required autocomplete="current-password" style="width:100%;padding:12px"></label><button style="margin-top:20px;padding:12px">Se connecter</button></form><p id="error" role="alert"></p><script>document.getElementById('login').onsubmit=async function(e){e.preventDefault();const token=document.getElementById('token').value.trim();try{const r=await fetch('/api/merchants/details',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error();const d=await r.json();sessionStorage.setItem('bot-access',token);const next=new URLSearchParams(location.search).get('next');location.href=next&&next.startsWith('/')&&!next.startsWith('//')?next:'/dashboard?shop='+encodeURIComponent(d.merchant.slug||d.merchant.id);}catch{document.getElementById('error').textContent='Code incorrect ou service indisponible.';}};</script></body></html>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion — Espace entreprise</title>
+  <meta name="theme-color" content="#087a5e">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js"></script>
+  <style>
+    body { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .side { background: linear-gradient(160deg, #075e48 0%, #087a5e 45%, #0b8f6f 100%); color: #fff; padding: 48px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
+    .side::after { content: ''; position: absolute; width: 520px; height: 520px; border-radius: 50%; right: -180px; bottom: -200px; background: rgba(255,255,255,.06); }
+    .side .brand { color: #fff; }
+    .side .brand-mark { background: rgba(255,255,255,.16); color: #fff; }
+    .side h2 { font-size: 30px; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; max-width: 440px; }
+    .side ul { list-style: none; padding: 0; margin: 28px 0 0; display: flex; flex-direction: column; gap: 14px; max-width: 420px; }
+    .side li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; color: rgba(255,255,255,.9); }
+    .side li .i { margin-top: 2px; color: #a7f3d0; }
+    .side .foot { font-size: 12px; color: rgba(255,255,255,.65); position: relative; z-index: 1; }
+    .main { display: flex; align-items: center; justify-content: center; padding: 32px 20px; }
+    .panel { width: 100%; max-width: 380px; }
+    .panel h1 { margin: 28px 0 6px; }
+    .panel > p { color: var(--text-2); margin-bottom: 24px; }
+    .check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-2); margin: -4px 0 20px; cursor: pointer; }
+    .check input { accent-color: var(--brand); width: 16px; height: 16px; }
+    .error { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 20px; }
+    .help { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
+    .pw { position: relative; }
+    .pw .btn { position: absolute; right: 4px; top: 4px; height: 32px; }
+    .mobile-brand { display: none; }
+    @media (max-width: 860px) {
+      body { grid-template-columns: 1fr; }
+      .side { display: none; }
+      .mobile-brand { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="side">
+    <div class="brand"><span class="brand-mark" id="mark"></span> Assistant IA multicanal</div>
+    <div style="position:relative;z-index:1">
+      <h2>Vos clients reçoivent une réponse en quelques secondes, sur tous vos réseaux.</h2>
+      <ul id="perks"></ul>
+    </div>
+    <div class="foot">Vos conversations restent privées à votre entreprise.</div>
+  </aside>
+
+  <main class="main">
+    <div class="panel">
+      <div class="brand mobile-brand"><span class="brand-mark" id="mark2"></span> Assistant IA multicanal</div>
+      <h1>Connexion à votre espace</h1>
+      <p>Entrez le code d'accès reçu lors de l'inscription de votre entreprise.</p>
+      <form id="form" novalidate>
+        <div class="field">
+          <label for="code">Code d'accès</label>
+          <div class="pw">
+            <input class="input" id="code" type="password" autocomplete="current-password" spellcheck="false" required placeholder="Collez votre code ici" style="padding-right:84px">
+            <button type="button" class="btn btn-ghost btn-sm" id="show">Afficher</button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="remember"> Rester connecté sur cet appareil</label>
+        <button class="btn btn-primary btn-lg btn-block" id="submit">Se connecter</button>
+        <div class="error" id="error" role="alert"></div>
+      </form>
+      <div class="help">Code perdu ? Contactez votre conseiller : un nouveau code peut être généré pour votre entreprise. Ne partagez jamais ce code.</div>
+    </div>
+  </main>
+
+  <script>
+    document.getElementById('mark').innerHTML = icon('chat');
+    document.getElementById('mark2').innerHTML = icon('chat');
+    document.getElementById('perks').innerHTML = [
+      ['chat', 'WhatsApp, Messenger, Instagram, Telegram et votre site au même endroit'],
+      ['hand', 'Reprenez la main sur n’importe quelle conversation, à tout moment'],
+      ['chart', 'Sachez ce que demandent vos clients et quand ils écrivent']
+    ].map(([i, t]) => `<li>${icon(i)}<span>${t}</span></li>`).join('');
+
+    const code = document.getElementById('code');
+    document.getElementById('show').onclick = e => {
+      const shown = code.type === 'text';
+      code.type = shown ? 'password' : 'text';
+      e.target.textContent = shown ? 'Afficher' : 'Masquer';
+    };
+
+    const next = new URLSearchParams(location.search).get('next') || '';
+    const safeNext = /^\/(?!\/)/.test(next) && !next.startsWith('/connexion') ? next : '';
+
+    document.getElementById('form').onsubmit = async e => {
+      e.preventDefault();
+      const err = document.getElementById('error'), btn = document.getElementById('submit');
+      const token = code.value.trim();
+      err.textContent = '';
+      if (!token) { err.textContent = 'Entrez votre code d’accès.'; code.focus(); return; }
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Vérification…';
+      try {
+        const res = await auth.nativeFetch('/api/merchants/details', { headers: { Authorization: 'Bearer ' + token } });
+        if (res.status === 401) throw Error('Code d’accès incorrect. Vérifiez qu’il est complet.');
+        if (!res.ok) throw Error('Connexion impossible pour le moment. Réessayez.');
+        const data = await res.json();
+        auth.save(token, document.getElementById('remember').checked);
+        const slug = data.merchant?.slug || data.merchant?.id || '';
+        location.href = safeNext || ('/dashboard' + (slug ? '?shop=' + encodeURIComponent(slug) : ''));
+      } catch (ex) {
+        err.textContent = ex.message === 'Failed to fetch' ? 'Serveur injoignable. Vérifiez votre connexion Internet.' : ex.message;
+        btn.disabled = false; btn.textContent = 'Se connecter';
+      }
+    };
+    code.focus();
+  </script>
+</body>
+</html>

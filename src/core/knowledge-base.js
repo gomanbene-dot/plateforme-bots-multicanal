@@ -66,6 +66,10 @@ export class KnowledgeBase {
       prompt += `\n- Site Web Officiel : ${config.websiteUrl}`;
     }
 
+    if (config.currentCampaign) {
+      prompt += `\n\n### PROMOTION EN COURS (à proposer quand c'est pertinent, sans insister) :\n${String(config.currentCampaign).slice(0, 1000)}`;
+    }
+
     // Injection du Catalogue de Produits / Services
     if (config.catalog && Array.isArray(config.catalog)) {
       prompt += `\n\n### 📦 CATALOGUE DE PRODUITS DISPONIBLES :`;
