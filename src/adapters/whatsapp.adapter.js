@@ -8,7 +8,7 @@
 
 export class WhatsAppAdapter {
   constructor(options = {}) {
-    this.verifyToken = options.verifyToken || process.env.META_VERIFY_TOKEN || 'ye_multicanal_verify_token_2026';
+    this.verifyToken = options.verifyToken || process.env.META_VERIFY_TOKEN || '';
     this.accessToken = options.accessToken || process.env.WHATSAPP_ACCESS_TOKEN || '';
     this.phoneNumberId = options.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID || '';
   }
@@ -21,7 +21,7 @@ export class WhatsAppAdapter {
     const token = urlSearchParams.get('hub.verify_token');
     const challenge = urlSearchParams.get('hub.challenge');
 
-    if (mode === 'subscribe' && token === this.verifyToken) {
+    if (mode === 'subscribe' && this.verifyToken && token === this.verifyToken) {
       return { success: true, challenge };
     }
     return { success: false, challenge: null };
@@ -55,6 +55,7 @@ export class WhatsAppAdapter {
 
       return {
         messageId,
+        recipientPhoneId: value.metadata?.phone_number_id,
         from,
         userName,
         text: text.trim(),
@@ -76,12 +77,13 @@ export class WhatsAppAdapter {
 
     if (!token || !phoneId) {
       console.log(`[WhatsApp Local/Demo Mode] Réponse prête pour ${to} : "${text}"`);
-      return { success: true, mode: 'simulated' };
+      return { success: false, error: 'CHANNEL_NOT_CONFIGURED' };
     }
 
     try {
-      const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+      const response = await fetch(`https://graph.facebook.com/${process.env.META_GRAPH_VERSION || 'v23.0'}/${phoneId}/messages`, {
         method: 'POST',
+        signal: AbortSignal.timeout(15000),
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

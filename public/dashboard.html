@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head>
+<head><script>
+const nativeFetch=window.fetch.bind(window);
+window.fetch=async function(input,options={}){
+ const target=new URL(typeof input==='string'?input:input.url,location.href);
+ if(target.origin===location.origin && target.pathname.startsWith('/api/')){
+  const token=sessionStorage.getItem('bot-access');
+  if(!token){location.href='/connexion?next='+encodeURIComponent(location.pathname+location.search);throw Error('Connexion requise');}
+  options.headers=new Headers(options.headers);options.headers.set('Authorization','Bearer '+token);
+ }
+ const response=await nativeFetch(input,options);
+ if(response.status===401){sessionStorage.removeItem('bot-access');location.href='/connexion';}
+ return response;
+};
+</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Espace Commerçant - Gestion de mon Assistant IA</title>
@@ -20,7 +33,76 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
     body { background: var(--bg-dark); color: var(--text-main); min-height: 100vh; padding: 20px; }
-    .container { max-width: 850px; margin: 0 auto; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    /* Onglets principaux */
+    .tabs { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 1px solid var(--card-border); overflow-x: auto; }
+    .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 700; font-size: 14px; padding: 10px 14px; cursor: pointer; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+    .tabs button[aria-selected="true"] { color: var(--text-main); border-bottom-color: var(--wa-green); }
+    .tabs .count { background: #ef4444; color: white; border-radius: 10px; font-size: 11px; padding: 1px 7px; }
+    .tabs .count:empty { display: none; }
+    [data-tab][hidden] { display: none !important; }
+    /* Boîte de réception */
+    .ib { display: grid; grid-template-columns: 340px 1fr; height: min(78vh, 760px); min-height: 480px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; overflow: hidden; margin-bottom: 20px; }
+    .ib-side { border-right: 1px solid var(--card-border); display: flex; flex-direction: column; min-width: 0; }
+    .ib-tools { padding: 12px; border-bottom: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 8px; }
+    .ib-tools input, .ib-tools select { background: #0f172a; border: 1px solid var(--card-border); color: var(--text-main); border-radius: 10px; padding: 9px 11px; font-size: 13px; width: 100%; }
+    .ib-filters { display: flex; gap: 4px; flex-wrap: wrap; }
+    .ib-filters button { background: #0f172a; border: 1px solid var(--card-border); color: var(--text-muted); border-radius: 20px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .ib-filters button[aria-pressed="true"] { background: #1e293b; color: var(--text-main); border-color: #475569; }
+    .ib-filters b { font-variant-numeric: tabular-nums; margin-left: 3px; }
+    .ib-list { overflow-y: auto; flex: 1; }
+    .ib-item { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; padding: 12px; border-bottom: 1px solid #172036; cursor: pointer; background: none; border-left: 3px solid transparent; width: 100%; text-align: left; color: inherit; font: inherit; border-top: 0; border-right: 0; }
+    .ib-item:hover { background: #172036; }
+    .ib-item[aria-current="true"] { background: #1a233a; border-left-color: var(--accent); }
+    .ib-item.needs { border-left-color: #fab219; }
+    .ib-avatar { width: 40px; height: 40px; border-radius: 50%; background: #1e293b; display: flex; align-items: center; justify-content: center; font-weight: 800; position: relative; font-size: 15px; }
+    .ib-avatar .net { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; border-radius: 50%; font-size: 9px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--card-bg); color: white; font-weight: 800; }
+    .net-whatsapp { background: #25D366; } .net-messenger { background: #0084ff; } .net-instagram { background: #d62976; }
+    .net-telegram { background: #229ED9; } .net-web { background: #6366f1; } .net-tiktok { background: #111; } .net-sms { background: #64748b; }
+    .ib-name { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ib-prev { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .ib-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 11px; color: var(--text-muted); }
+    .ib-unread { background: var(--wa-green); color: #052e16; border-radius: 10px; padding: 1px 7px; font-weight: 800; font-size: 11px; }
+    .chip { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+    .chip-bot { background: rgba(99,102,241,.18); color: #a5b4fc; } .chip-human { background: rgba(37,211,102,.16); color: #4ade80; }
+    .chip-closed { background: #1e293b; color: var(--text-muted); } .chip-flag { background: rgba(250,178,25,.16); color: #fab219; }
+    .ib-main { display: flex; flex-direction: column; min-width: 0; }
+    .ib-empty { margin: auto; text-align: center; color: var(--text-muted); font-size: 13px; padding: 30px; }
+    .ib-head { padding: 12px 16px; border-bottom: 1px solid var(--card-border); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .ib-head .who { flex: 1; min-width: 160px; }
+    .ib-head .who div:first-child { font-weight: 800; font-size: 15px; }
+    .ib-head .who div:last-child { font-size: 12px; color: var(--text-muted); }
+    .ib-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ib-btn { background: #1e293b; color: var(--text-main); border: 1px solid #334155; border-radius: 9px; padding: 7px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .ib-btn.primary { background: var(--wa-green); color: #052e16; border-color: var(--wa-green); }
+    .ib-btn.back { display: none; }
+    .ib-banner { margin: 10px 16px 0; padding: 9px 12px; border-radius: 10px; font-size: 12px; line-height: 1.5; }
+    .ib-banner.flag { background: rgba(250,178,25,.12); color: #fcd34d; }
+    .ib-banner.human { background: rgba(37,211,102,.1); color: #86efac; }
+    .ib-banner.window { background: rgba(239,68,68,.12); color: #fca5a5; }
+    .ib-thread { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .msg { max-width: 75%; padding: 9px 12px; border-radius: 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+    .msg .by { display: block; font-size: 10px; font-weight: 800; margin-bottom: 2px; opacity: .8; text-transform: uppercase; letter-spacing: .03em; }
+    .msg .at { display: block; font-size: 10px; opacity: .6; margin-top: 3px; text-align: right; }
+    .msg.client { background: #1e293b; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .msg.bot { background: #2a2f6b; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .msg.agent { background: #14532d; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .msg.system { align-self: center; background: none; color: var(--text-muted); font-size: 11px; font-style: italic; text-align: center; max-width: 90%; }
+    .ib-day { align-self: center; font-size: 11px; color: var(--text-muted); background: #0f172a; padding: 2px 10px; border-radius: 10px; margin: 6px 0; }
+    .ib-compose { border-top: 1px solid var(--card-border); padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end; }
+    .ib-compose textarea { flex: 1; resize: none; background: #0f172a; border: 1px solid var(--card-border); color: var(--text-main); border-radius: 12px; padding: 10px 12px; font-size: 13px; max-height: 140px; min-height: 42px; }
+    .ib-compose .hint { font-size: 11px; color: var(--text-muted); padding: 0 12px 8px; }
+    .ib-card { border-top: 1px solid var(--card-border); padding: 10px 16px; font-size: 12px; }
+    .ib-card summary { cursor: pointer; color: var(--text-muted); font-weight: 700; }
+    .ib-card textarea, .ib-card input { width: 100%; margin-top: 8px; background: #0f172a; border: 1px solid var(--card-border); color: var(--text-main); border-radius: 8px; padding: 8px; font-size: 12px; }
+    @media (max-width: 760px) {
+      .ib { grid-template-columns: 1fr; height: 82vh; }
+      .ib-side { border-right: 0; }
+      .ib.open .ib-side { display: none; }
+      .ib:not(.open) .ib-main { display: none; }
+      .ib-btn.back { display: inline-block; }
+      .msg { max-width: 88%; }
+    }
     header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--card-border); margin-bottom: 24px; }
     .shop-badge { display: flex; align-items: center; gap: 12px; }
     .shop-badge .icon { width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent), #25D366); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
@@ -36,6 +118,51 @@
     .btn-action { background: var(--accent); color: white; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
     .btn-action:hover { opacity: 0.9; transform: translateY(-1px); }
     .btn-momo { background: #25D366; color: black; font-weight: 800; }
+    /* Statistiques et analyse */
+    .an-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .an-head h3 { margin: 0; }
+    .an-filters { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .an-seg { display: inline-flex; background: #0f172a; border: 1px solid var(--card-border); border-radius: 10px; padding: 3px; }
+    .an-seg button { background: none; border: 0; color: var(--text-muted); font-weight: 700; font-size: 12px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+    .an-seg button[aria-pressed="true"] { background: #1e293b; color: var(--text-main); }
+    .an-btn { background: #1e293b; color: var(--text-main); border: 1px solid var(--card-border); border-radius: 10px; font-size: 12px; font-weight: 700; padding: 8px 12px; cursor: pointer; }
+    .an-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .an-kpi { background: #1a233a; border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; }
+    .an-kpi .k-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+    .an-kpi .k-value { font-size: 24px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .an-kpi .k-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .an-kpi .k-delta.up { color: #4ade80; } .an-kpi .k-delta.down { color: #f87171; }
+    .an-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 14px; }
+    .an-panel { background: #1a233a; border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; min-width: 0; }
+    .an-panel h4 { font-size: 13px; margin-bottom: 4px; color: var(--text-main); }
+    .an-panel .hint { font-size: 11px; color: var(--text-muted); margin-bottom: 12px; }
+    .an-chart { position: relative; }
+    .an-chart svg { display: block; width: 100%; overflow: visible; }
+    .an-tip { position: absolute; pointer-events: none; background: #0b1220; border: 1px solid #334155; border-radius: 8px; padding: 6px 9px; font-size: 12px; color: var(--text-main); white-space: nowrap; transform: translate(-50%, -110%); opacity: 0; transition: opacity .1s; z-index: 2; }
+    .an-tip strong { font-variant-numeric: tabular-nums; }
+    .an-bars { display: flex; flex-direction: column; gap: 8px; }
+    .an-bar { display: grid; grid-template-columns: minmax(90px, 38%) 1fr 44px; gap: 8px; align-items: center; font-size: 12px; }
+    .an-bar .lbl { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .an-bar .track { height: 10px; background: #0f172a; border-radius: 4px; overflow: hidden; }
+    .an-bar .fill { height: 100%; background: #3987e5; border-radius: 0 4px 4px 0; }
+    .an-bar .val { text-align: right; color: var(--text-main); font-variant-numeric: tabular-nums; }
+    .an-heat { display: grid; grid-template-columns: 28px repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 10px; color: var(--text-muted); }
+    .an-heat > span { min-width: 0; overflow: visible; white-space: nowrap; }
+    .an-heat .cell { aspect-ratio: 1; border-radius: 3px; background: #0f172a; min-height: 6px; }
+    .an-heat .hl { display: flex; align-items: center; }
+    .an-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+    .an-list li { background: #0f172a; border-radius: 8px; padding: 9px 11px; color: var(--text-main); display: flex; gap: 8px; justify-content: space-between; }
+    .an-list li span.meta { color: var(--text-muted); white-space: nowrap; }
+    .an-insight { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: #0f172a; margin-bottom: 8px; }
+    .an-insight .tag { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px; white-space: nowrap; margin-top: 2px; }
+    .tag.good { background: rgba(12,163,12,.18); color: #4ade80; } .tag.warn { background: rgba(236,131,90,.18); color: #ec835a; }
+    .tag.action { background: rgba(250,178,25,.18); color: #fab219; } .tag.info { background: rgba(57,135,229,.18); color: #86b6ef; }
+    .an-senti { display: flex; gap: 8px; flex-wrap: wrap; }
+    .an-senti div { flex: 1; min-width: 90px; background: #0f172a; border-radius: 10px; padding: 10px; font-size: 12px; color: var(--text-muted); }
+    .an-senti b { display: block; font-size: 18px; color: var(--text-main); font-variant-numeric: tabular-nums; }
+    .an-empty { color: var(--text-muted); font-size: 12px; padding: 10px 0; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    @media (max-width: 600px) { body { padding: 12px; } .stats-grid { grid-template-columns: 1fr; } header { flex-wrap: wrap; gap: 10px; } }
     .links-box { background: #0f172a; border-radius: 10px; padding: 12px; display: flex; gap: 8px; align-items: center; margin-top: 8px; font-family: monospace; font-size: 13px; word-break: break-all; }
   </style>
 </head>
@@ -55,8 +182,42 @@
       </div>
     </header>
 
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" data-go="inbox" aria-selected="true">💬 Conversations <span class="count" id="tab-count-inbox"></span></button>
+      <button type="button" role="tab" data-go="stats" aria-selected="false">📊 Statistiques</button>
+      <button type="button" role="tab" data-go="settings" aria-selected="false">⚙️ Mon assistant</button>
+    </nav>
+
+    <!-- Boîte de réception unifiée -->
+    <section data-tab="inbox" class="ib" id="ib">
+      <aside class="ib-side">
+        <div class="ib-tools">
+          <input type="search" id="ib-search" placeholder="Rechercher un client, un message, une étiquette…" aria-label="Rechercher">
+          <div class="ib-filters" role="group" aria-label="Filtrer">
+            <button type="button" data-filter="needs" aria-pressed="false">À traiter<b data-count="needs"></b></button>
+            <button type="button" data-filter="all" aria-pressed="true">Ouvertes<b data-count="all"></b></button>
+            <button type="button" data-filter="human" aria-pressed="false">Avec l'équipe<b data-count="human"></b></button>
+            <button type="button" data-filter="unread" aria-pressed="false">Non lues<b data-count="unread"></b></button>
+            <button type="button" data-filter="closed" aria-pressed="false">Traitées<b data-count="closed"></b></button>
+          </div>
+          <select id="ib-platform" aria-label="Réseau">
+            <option value="">Tous les réseaux</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="messenger">Messenger</option>
+            <option value="instagram">Instagram</option>
+            <option value="telegram">Telegram</option>
+            <option value="web">Chat web</option>
+          </select>
+        </div>
+        <div class="ib-list" id="ib-list" role="list"></div>
+      </aside>
+      <div class="ib-main" id="ib-main">
+        <div class="ib-empty">Choisissez une conversation à gauche.<br>Les clients de tous vos réseaux arrivent ici, au même endroit.</div>
+      </div>
+    </section>
+
     <!-- Statistiques & Crédits -->
-    <div class="stats-grid">
+    <div class="stats-grid" data-tab="settings" hidden>
       <div class="stat-box">
         <div class="num" id="stat-credits">20</div>
         <div class="label">Crédits Messages Restants</div>
@@ -71,8 +232,126 @@
       </div>
     </div>
 
+    <!-- Statistiques et analyse des conversations -->
+    <div class="card" id="analytics-card" data-tab="stats" hidden>
+      <div class="an-head">
+        <h3>📊 Statistiques et analyse</h3>
+        <div class="an-filters">
+          <div class="an-seg" role="group" aria-label="Période">
+            <button type="button" data-days="7" aria-pressed="false">7 jours</button>
+            <button type="button" data-days="30" aria-pressed="true">30 jours</button>
+            <button type="button" data-days="90" aria-pressed="false">90 jours</button>
+          </div>
+          <button type="button" class="an-btn" id="an-export">Exporter (CSV)</button>
+        </div>
+      </div>
+
+      <div id="an-insights"></div>
+      <div class="an-kpis" id="an-kpis"></div>
+
+      <div class="an-grid">
+        <div class="an-panel" style="grid-column: 1 / -1;">
+          <h4>Messages reçus par jour</h4>
+          <p class="hint">Survolez une barre pour le détail.</p>
+          <div class="an-chart" id="an-daily"></div>
+        </div>
+      </div>
+
+      <div class="an-grid">
+        <div class="an-panel">
+          <h4>Ce que demandent vos clients</h4>
+          <p class="hint">Sujets détectés automatiquement dans les messages.</p>
+          <div class="an-bars" id="an-intents"></div>
+        </div>
+        <div class="an-panel">
+          <h4>Messages par réseau</h4>
+          <p class="hint">D'où viennent vos conversations.</p>
+          <div class="an-bars" id="an-platforms"></div>
+          <h4 style="margin-top:18px">Humeur des clients</h4>
+          <p class="hint">Estimée à partir des mots employés.</p>
+          <div class="an-senti" id="an-sentiment"></div>
+        </div>
+      </div>
+
+      <div class="an-grid">
+        <div class="an-panel" style="grid-column: 1 / -1;">
+          <h4>Quand vos clients écrivent</h4>
+          <p class="hint">Plus la case est claire, plus il y a de messages à ce moment.</p>
+          <div class="an-chart"><div class="an-heat" id="an-heat"></div></div>
+        </div>
+      </div>
+
+      <div class="an-grid">
+        <div class="an-panel">
+          <h4>Questions les plus fréquentes</h4>
+          <p class="hint">Idéal pour enrichir vos informations et vos publications.</p>
+          <ul class="an-list" id="an-questions"></ul>
+        </div>
+        <div class="an-panel">
+          <h4>Questions sans réponse</h4>
+          <p class="hint">L'assistant a dû renvoyer vers vous : ajoutez ces informations.</p>
+          <ul class="an-list" id="an-gaps"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connexion WhatsApp en Direct par QR Code -->
+    <div class="card" id="card-whatsapp-connection" data-tab="settings" hidden style="border: 1px solid rgba(37, 211, 102, 0.4); background: linear-gradient(180deg, #131b2e 0%, #0e1726 100%);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3>📱 Connexion WhatsApp en Direct (Sans compte Meta)</h3>
+        <span id="wa-badge-status" style="background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid #eab308; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">Chargement...</span>
+      </div>
+
+      <!-- État 1 : Scan du QR Code Requis -->
+      <div id="wa-scan-container" style="display: none;">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          Liez votre numéro WhatsApp au bot en 5 secondes en scannant le code QR ci-dessous avec votre téléphone :
+        </p>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: center; background: #0f172a; border-radius: 14px; padding: 20px; border: 1px dashed var(--card-border);">
+          <div id="wa-qr-wrapper" style="width: 220px; height: 220px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+            <img id="wa-qr-img" src="" alt="Scan WhatsApp QR" style="width: 100%; height: 100%; object-fit: contain; display: none;">
+            <div id="wa-qr-loading" style="color: #0f172a; font-size: 13px; font-weight: 700; text-align: center; padding: 10px;">
+              Génération du QR Code... ⏳
+            </div>
+          </div>
+
+          <div style="flex: 1; min-width: 260px;">
+            <h4 style="font-size: 14px; color: white; margin-bottom: 10px;">Instructions simples :</h4>
+            <ol style="font-size: 13px; color: var(--text-muted); line-height: 1.8; padding-left: 18px;">
+              <li>Ouvrez <strong>WhatsApp</strong> sur votre smartphone.</li>
+              <li>Appuyez sur le <strong>Menu ⋮</strong> (Android) ou <strong>Réglages</strong> (iPhone).</li>
+              <li>Sélectionnez <strong>Appareils connectés</strong>.</li>
+              <li>Appuyez sur <strong>Connecter un appareil</strong>.</li>
+              <li>Pointez votre téléphone vers ce QR code pour scanner.</li>
+            </ol>
+            <div style="margin-top: 14px;">
+              <button class="btn-action" onclick="refreshWhatsAppQR()" style="padding: 8px 14px; font-size: 12px; background: #1e293b;">Rafraîchir le QR Code 🔄</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- État 2 : WhatsApp Déjà Connecté -->
+      <div id="wa-connected-container" style="display: none; background: rgba(37, 211, 102, 0.08); border: 1px solid rgba(37, 211, 102, 0.3); border-radius: 12px; padding: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+          <div>
+            <div style="font-weight: 800; font-size: 15px; color: var(--wa-green); margin-bottom: 4px;">
+              ✅ Votre WhatsApp est actuellement connecté et opérationnel !
+            </div>
+            <div style="font-size: 13px; color: var(--text-muted);">
+              Numéro lié : <strong id="wa-connected-number" style="color: white;">Inconnu</strong> — L'IA répond automatiquement à tous vos nouveaux messages.
+            </div>
+          </div>
+          <button class="btn-action" onclick="disconnectWhatsApp()" style="background: #ef4444; font-size: 12px; padding: 8px 14px;">
+            Déconnecter / Changer de numéro 🔌
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Liens de Partage du Commerçant -->
-    <div class="card">
+    <div class="card" data-tab="settings" hidden>
       <h3>📱 Vos Liens de Vente & QR Code (À donner à vos clients)</h3>
       <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Mettez ce lien sur vos statuts WhatsApp, votre page Facebook ou votre bio Instagram :</p>
       
@@ -94,7 +373,7 @@
     </div>
 
     <!-- Campagnes & Promotions en Cours -->
-    <div class="card">
+    <div class="card" data-tab="settings" hidden>
       <h3>📢 Campagnes & Promotions Flash du Moment</h3>
       <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">Indiquez ici vos réductions ou événements en cours. L'IA les proposera automatiquement à chaque client qui vous écrit !</p>
       
@@ -106,21 +385,45 @@
       <button class="btn-action" onclick="saveCampaign()">Sauvegarder & Diffuser la Promotion 🚀</button>
     </div>
 
-    <!-- Historique des Conversations en Direct -->
-    <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3>💬 Historique des Discussions en Direct</h3>
-        <button class="btn-action" onclick="loadConversations()" style="padding: 6px 12px; font-size: 12px;">Actualiser 🔄</button>
+    <!-- Personnalisation du Ton, Registre et Émojis -->
+    <div class="card" data-tab="settings" hidden>
+      <h3>🎭 Personnalisation du Ton, des Émojis et du Registre</h3>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+        Ajustez exactement la manière dont votre assistant s'exprime auprès de vos clients :
+      </p>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+        <div class="form-group">
+          <label>Utilisation des Émojis :</label>
+          <select id="style-emoji" class="form-control">
+            <option value="none">🚫 Aucun émoji (100% sobre, texte pur)</option>
+            <option value="minimal">👌 Minimal (1 émoji discret max si nécessaire)</option>
+            <option value="moderate">✨ Modéré (Émojis autorisés)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Registre de Langue & Attitude :</label>
+          <select id="style-register" class="form-control">
+            <option value="professionnel_courtois">🎩 Professionnel & Courtois (Vouvoiement strict)</option>
+            <option value="naturel_direct">🤝 Naturel & Direct (Clair et humain)</option>
+            <option value="pedagogique">📚 Pédagogique & Bienveillant (Conseiller éducatif)</option>
+          </select>
+        </div>
       </div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">Consultez les messages échangés entre vos clients et votre assistant IA :</p>
-      
-      <div id="conversations-container" style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto;">
-        <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px;">Aucune conversation enregistrée pour le moment.</div>
+
+      <div class="form-group">
+        <label>Consignes Particulières & Tournures Interdites ou Imposées :</label>
+        <textarea id="style-directives" class="form-control" rows="2" placeholder="Ex: Ne jamais utiliser de listes à puces artificielles avec des coches. Faire de vraies phrases naturelles. Toujours vouvoyer."></textarea>
       </div>
+
+      <button class="btn-action" onclick="saveStyleSettings()" style="background: var(--accent);">
+        Enregistrer le Style de Réponse 💾
+      </button>
     </div>
 
     <!-- Recharger les Crédits PayMooney -->
-    <div class="card">
+    <div class="card" data-tab="settings" hidden>
       <h3>💳 Recharger mon Assistant (Orange Money & MTN MoMo)</h3>
       <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">Choisissez un forfait pour que votre bot continue de répondre à vos clients sans interruption :</p>
       
@@ -148,16 +451,17 @@
           document.getElementById('merchant-city').innerText = `Localisation : ${m.city || 'Yaoundé'} | Assistant : ${m.botName || 'Sarah'} | Livraison : ${m.deliveryTerms || 'Disponible'}`;
           document.getElementById('stat-credits').innerText = m.credits_remaining ?? 20;
           document.getElementById('stat-answered').innerText = m.total_messages_processed ?? 0;
-          document.getElementById('link-tg').innerText = `https://t.me/Alnafisnolan_bot?start=${shopSlug}`;
+          document.getElementById('link-tg').innerText = `Canal à connecter pour cette entreprise`;
           document.getElementById('link-web').innerText = `${window.location.origin}/?shop=${shopSlug}`;
           if (m.currentCampaign) {
             document.getElementById('campaign-text').value = m.currentCampaign;
           }
         }
       } catch (e) {}
-      loadConversations();
+      loadStyleSettings();
     }
 
+    function escapeText(value){const el=document.createElement('span');el.textContent=String(value??'');return el.innerHTML;}
     async function loadConversations() {
       const container = document.getElementById('conversations-container');
       try {
@@ -167,17 +471,50 @@
           container.innerHTML = data.conversations.map(c => `
             <div style="background: #1a233a; border: 1px solid var(--card-border); border-radius: 12px; padding: 14px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-weight: 700; font-size: 13px; color: var(--text-main);">👤 ${c.senderName || 'Client'} <span style="font-size: 11px; color: var(--wa-green); background: rgba(37, 211, 102, 0.1); padding: 2px 6px; border-radius: 10px; margin-left: 6px;">${c.platform.toUpperCase()}</span></span>
-                <span style="font-size: 11px; color: var(--text-muted);">${c.time || ''}</span>
+                <span style="font-weight: 700; font-size: 13px; color: var(--text-main);">👤 ${escapeText(c.senderName || 'Client')} <span style="font-size: 11px; color: var(--wa-green); background: rgba(37, 211, 102, 0.1); padding: 2px 6px; border-radius: 10px; margin-left: 6px;">${escapeText(c.platform).toUpperCase()}</span></span>
+                <span style="font-size: 11px; color: var(--text-muted);">${escapeText(c.time || '')}</span>
               </div>
-              <div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;"><strong>Client:</strong> "${c.userMessage}"</div>
-              <div style="font-size: 12px; color: #38bdf8; background: #0f172a; padding: 8px 10px; border-radius: 8px;"><strong>🤖 IA:</strong> ${c.botReply}</div>
+              <div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;"><strong>Client:</strong> "${escapeText(c.userMessage)}"</div>
+              <div style="font-size: 12px; color: #38bdf8; background: #0f172a; padding: 8px 10px; border-radius: 8px;"><strong>🤖 IA:</strong> ${escapeText(c.botReply)}</div>
             </div>
           `).join('');
         } else {
           container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px;">Aucune conversation récente. Partagez votre lien pour recevoir vos premiers messages !</div>`;
         }
       } catch (e) {}
+    }
+
+    async function loadStyleSettings() {
+      try {
+        const res = await fetch(`/api/settings/style?shop=${shopSlug}`);
+        const data = await res.json();
+        if (data.success && data.styleSettings) {
+          const s = data.styleSettings;
+          if (s.emojiLevel) document.getElementById('style-emoji').value = s.emojiLevel;
+          if (s.register) document.getElementById('style-register').value = s.register;
+          if (s.customDirectives) document.getElementById('style-directives').value = s.customDirectives;
+        }
+      } catch (e) {}
+    }
+
+    async function saveStyleSettings() {
+      const emojiLevel = document.getElementById('style-emoji').value;
+      const register = document.getElementById('style-register').value;
+      const customDirectives = document.getElementById('style-directives').value.trim();
+
+      try {
+        const res = await fetch('/api/settings/style', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shop: shopSlug, emojiLevel, register, customDirectives })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ Style de réponse enregistré avec succès ! Le bot applique désormais vos consignes.');
+        }
+      } catch (err) {
+        alert('Erreur lors de la sauvegarde du style.');
+      }
     }
 
     async function saveCampaign() {
@@ -221,7 +558,382 @@
       alert('Lien copié dans le presse-papier !');
     }
 
+    // Gestion de la Connexion WhatsApp QR Code
+    async function checkWhatsAppStatus() {
+      try {
+        const res = await fetch('/api/whatsapp/status');
+        const data = await res.json();
+        
+        const badge = document.getElementById('wa-badge-status');
+        const scanContainer = document.getElementById('wa-scan-container');
+        const connectedContainer = document.getElementById('wa-connected-container');
+        const qrImg = document.getElementById('wa-qr-img');
+        const qrLoading = document.getElementById('wa-qr-loading');
+
+        if (data.status === 'CONNECTED') {
+          badge.innerText = '● Connecté';
+          badge.style.background = 'rgba(37, 211, 102, 0.15)';
+          badge.style.color = 'var(--wa-green)';
+          badge.style.borderColor = 'var(--wa-green)';
+
+          scanContainer.style.display = 'none';
+          connectedContainer.style.display = 'block';
+          if (data.user) {
+            document.getElementById('wa-connected-number').innerText = data.user.id || 'Connecté';
+          }
+        } else {
+          badge.innerText = data.status === 'SCAN_NEEDED' ? '⏳ Scan QR Requis' : 'Initialisation...';
+          badge.style.background = 'rgba(234, 179, 8, 0.15)';
+          badge.style.color = '#eab308';
+          badge.style.borderColor = '#eab308';
+
+          connectedContainer.style.display = 'none';
+          scanContainer.style.display = 'block';
+
+          if (data.qrCode) {
+            qrImg.src = data.qrCode;
+            qrImg.style.display = 'block';
+            qrLoading.style.display = 'none';
+          } else {
+            qrImg.style.display = 'none';
+            qrLoading.style.display = 'block';
+            qrLoading.innerText = 'Génération du QR Code... ⏳';
+          }
+        }
+      } catch (err) {
+        console.error('Erreur vérification statut WhatsApp :', err);
+      }
+    }
+
+    async function refreshWhatsAppQR() {
+      const qrLoading = document.getElementById('wa-qr-loading');
+      const qrImg = document.getElementById('wa-qr-img');
+      qrImg.style.display = 'none';
+      qrLoading.style.display = 'block';
+      qrLoading.innerText = 'Actualisation... ⏳';
+      try {
+        await fetch('/api/whatsapp/restart', { method: 'POST' });
+        setTimeout(checkWhatsAppStatus, 1500);
+      } catch (e) {
+        checkWhatsAppStatus();
+      }
+    }
+
+    async function disconnectWhatsApp() {
+      if (!confirm('Voulez-vous vraiment déconnecter ce numéro WhatsApp ?')) return;
+      try {
+        await fetch('/api/whatsapp/disconnect', { method: 'POST' });
+        alert('WhatsApp déconnecté. Un nouveau QR Code va être généré.');
+        setTimeout(checkWhatsAppStatus, 1500);
+      } catch (err) {
+        alert('Erreur lors de la déconnexion.');
+      }
+    }
+
+    // ===== Statistiques et analyse =====
+    let analyticsDays = 30;
+    const nf = new Intl.NumberFormat('fr-FR');
+    const PLATFORM_NAMES = { whatsapp: 'WhatsApp', messenger: 'Messenger', instagram: 'Instagram', telegram: 'Telegram', web: 'Chat web', tiktok: 'TikTok', sms: 'SMS' };
+    const pct = v => Math.round((v || 0) * 100) + ' %';
+    const duration = ms => !ms ? '–' : ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1).replace('.', ',') + ' s';
+
+    function delta(cur, prev, invert) {
+      if (!prev) return '';
+      const d = (cur - prev) / prev;
+      if (Math.abs(d) < 0.01) return '<span class="k-delta">stable</span>';
+      const good = invert ? d < 0 : d > 0;
+      return `<span class="k-delta ${good ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.round(Math.abs(d) * 100)} %</span>`;
+    }
+
+    function renderKpis(k, p) {
+      const tiles = [
+        ['Messages reçus', nf.format(k.messages), delta(k.messages, p.messages) + ' vs période précédente'],
+        ['Clients uniques', nf.format(k.contacts), `${nf.format(k.newContacts)} nouveaux · ${nf.format(k.returningContacts)} fidèles`],
+        ['Réponses autonomes', pct(k.answerRate), `${pct(k.escalationRate)} renvoyées vers vous`],
+        ['Délai de réponse', duration(k.medianLatencyMs), 'médiane, toutes conversations'],
+        ['Hors heures d’ouverture', pct(k.offHoursShare), 'avant 8 h ou après 19 h'],
+        ['Intentions d’achat', nf.format(k.purchaseIntents), delta(k.purchaseIntents, p.purchaseIntents) + ' clients prêts à acheter'],
+        ['Numéros laissés', nf.format(k.leads), 'contacts à rappeler'],
+        ['Réclamations', nf.format(k.complaints), delta(k.complaints, p.complaints, true) + ' à traiter en priorité']
+      ];
+      document.getElementById('an-kpis').innerHTML = tiles.map(([l, v, s]) =>
+        `<div class="an-kpi"><div class="k-label">${l}</div><div class="k-value">${v}</div><div class="k-sub">${s}</div></div>`).join('');
+    }
+
+    function renderInsights(list) {
+      const tags = { good: 'Bon signe', warn: 'Attention', action: 'À faire', info: 'Conseil' };
+      document.getElementById('an-insights').innerHTML = list.map(i =>
+        `<div class="an-insight"><span class="tag ${i.level}">${tags[i.level] || 'Info'}</span><span>${escapeText(i.text)}</span></div>`).join('');
+    }
+
+    function renderDaily(daily) {
+      const box = document.getElementById('an-daily');
+      const W = 760, H = 180, padL = 30, padB = 22, padT = 8;
+      const max = Math.max(1, ...daily.map(d => d.messages));
+      const step = Math.pow(10, Math.floor(Math.log10(max)));
+      const top = Math.ceil(max / step) * step;
+      const slot = (W - padL) / daily.length, bw = Math.max(2, Math.min(28, slot - 2));
+      const y = v => padT + (H - padT - padB) * (1 - v / top);
+      const fmt = s => { const [yy, mm, dd] = s.split('-'); return `${dd}/${mm}`; };
+      const labelEvery = Math.ceil(daily.length / 8);
+      let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Messages reçus par jour">`;
+      for (const v of [0, top / 2, top]) svg += `<line x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="#1e293b" stroke-width="1"/><text x="${padL - 6}" y="${y(v) + 3}" fill="#94a3b8" font-size="10" text-anchor="end">${nf.format(v)}</text>`;
+      daily.forEach((d, i) => {
+        const x = padL + i * slot + (slot - bw) / 2, h = H - padB - y(d.messages);
+        if (d.messages) svg += `<path d="M${x},${H - padB} v${-Math.max(0, h - 4)} q0,-4 4,-4 h${bw - 8} q4,0 4,4 v${Math.max(0, h - 4)} z" fill="#3987e5"/>`;
+        svg += `<rect class="hit" data-i="${i}" x="${padL + i * slot}" y="${padT}" width="${slot}" height="${H - padT - padB}" fill="transparent"/>`;
+        if (i % labelEvery === 0) svg += `<text x="${x + bw / 2}" y="${H - 6}" fill="#94a3b8" font-size="10" text-anchor="middle">${fmt(d.date)}</text>`;
+      });
+      svg += `</svg><div class="an-tip"></div><table class="sr-only"><tr><th>Jour</th><th>Messages</th><th>Clients</th></tr>${daily.map(d => `<tr><td>${d.date}</td><td>${d.messages}</td><td>${d.contacts}</td></tr>`).join('')}</table>`;
+      box.innerHTML = svg;
+      const tip = box.querySelector('.an-tip'), el = box.querySelector('svg');
+      el.addEventListener('mousemove', e => {
+        const r = e.target.closest('.hit'); if (!r) { tip.style.opacity = 0; return; }
+        const d = daily[+r.dataset.i], b = el.getBoundingClientRect(), s = b.width / W;
+        tip.innerHTML = `${fmt(d.date)} · <strong>${nf.format(d.messages)}</strong> messages · ${nf.format(d.contacts)} clients`;
+        tip.style.left = Math.min(b.width - 80, Math.max(80, (+r.getAttribute('x') + slot / 2) * s)) + 'px';
+        tip.style.top = y(d.messages) * s + 'px'; tip.style.opacity = 1;
+      });
+      el.addEventListener('mouseleave', () => tip.style.opacity = 0);
+    }
+
+    function renderBars(id, rows, nameOf) {
+      const total = rows.reduce((s, r) => s + r.count, 0), max = Math.max(1, ...rows.map(r => r.count));
+      document.getElementById(id).innerHTML = rows.length ? rows.slice(0, 8).map(r =>
+        `<div class="an-bar" title="${escapeText(nameOf(r))} : ${r.count} (${Math.round(r.count / total * 100)} %)"><span class="lbl">${escapeText(nameOf(r))}</span><span class="track"><span class="fill" style="display:block;width:${(r.count / max * 100).toFixed(1)}%"></span></span><span class="val">${nf.format(r.count)}</span></div>`).join('')
+        : '<div class="an-empty">Pas encore de données.</div>';
+    }
+
+    function renderHeat(week) {
+      // Rampe bleue séquentielle : sombre (peu) vers clair (beaucoup) sur fond sombre
+      const ramp = ['#184f95', '#1c5cab', '#256abf', '#2a78d6', '#3987e5', '#5598e7', '#6da7ec', '#86b6ef'];
+      const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+      const max = Math.max(1, ...week.flat());
+      let html = '<span></span>' + Array.from({ length: 24 }, (_, h) => `<span style="text-align:center">${h % 3 === 0 ? h : ''}</span>`).join('');
+      week.forEach((row, d) => {
+        html += `<span class="hl">${days[d]}</span>`;
+        row.forEach((v, h) => {
+          const bg = v ? ramp[Math.min(ramp.length - 1, Math.floor(v / max * (ramp.length - 1e-9)))] : '#0f172a';
+          html += `<span class="cell" style="background:${bg}" title="${days[d]} ${h} h – ${h + 1} h : ${v} message(s)"></span>`;
+        });
+      });
+      document.getElementById('an-heat').innerHTML = html;
+    }
+
+    function renderList(id, rows, meta, empty) {
+      document.getElementById(id).innerHTML = rows.length
+        ? rows.map(r => `<li><span>${escapeText(r.text)}</span><span class="meta">${meta(r)}</span></li>`).join('')
+        : `<li><span class="meta">${empty}</span></li>`;
+    }
+
+    async function loadAnalytics() {
+      try {
+        const res = await fetch(`/api/analytics?shop=${encodeURIComponent(shopSlug)}&days=${analyticsDays}`);
+        if (!res.ok) throw Error(res.status);
+        const a = await res.json();
+        renderInsights(a.insights || []);
+        renderKpis(a.kpis, a.previous);
+        renderDaily(a.daily);
+        renderBars('an-intents', a.intents, r => r.label);
+        renderBars('an-platforms', a.platforms, r => PLATFORM_NAMES[r.key] || r.key);
+        const s = a.sentiment, t = Math.max(1, s.positif + s.neutre + s.negatif);
+        document.getElementById('an-sentiment').innerHTML =
+          `<div><b>${Math.round(s.positif / t * 100)} %</b><span class="tag good">Satisfaits</span></div>` +
+          `<div><b>${Math.round(s.neutre / t * 100)} %</b><span class="tag info">Neutres</span></div>` +
+          `<div><b>${Math.round(s.negatif / t * 100)} %</b><span class="tag warn">Mécontents</span></div>`;
+        renderHeat(a.weekHours);
+        renderList('an-questions', a.topQuestions, r => '× ' + r.count, 'Pas encore de questions.');
+        renderList('an-gaps', a.knowledgeGaps, r => new Date(r.at).toLocaleDateString('fr-FR'), 'Aucune question sans réponse. 👍');
+      } catch (e) {
+        document.getElementById('an-insights').innerHTML = '<div class="an-empty">Statistiques indisponibles pour le moment.</div>';
+      }
+    }
+
+    document.querySelectorAll('.an-seg button').forEach(b => b.addEventListener('click', () => {
+      analyticsDays = +b.dataset.days;
+      document.querySelectorAll('.an-seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      loadAnalytics();
+    }));
+
+    document.getElementById('an-export').addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/api/analytics/export?shop=${encodeURIComponent(shopSlug)}&days=${analyticsDays}`);
+        if (!res.ok) throw Error();
+        const url = URL.createObjectURL(await res.blob());
+        const a = Object.assign(document.createElement('a'), { href: url, download: `statistiques-${analyticsDays}j.csv` });
+        a.click(); URL.revokeObjectURL(url);
+      } catch { alert('Export impossible pour le moment.'); }
+    });
+
+    // ===== Onglets =====
+    function showTab(name) {
+      document.querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-selected', b.dataset.go === name));
+      document.querySelectorAll('[data-tab]').forEach(el => el.hidden = el.dataset.tab !== name);
+      try { localStorage.setItem('dash-tab', name); } catch {}
+      if (name === 'stats') loadAnalytics();
+    }
+    document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.go)));
+
+    // ===== Boîte de réception unifiée =====
+    const NET_LETTER = { whatsapp: 'W', messenger: 'M', instagram: 'I', telegram: 'T', web: '⌂', tiktok: 'K', sms: 'S' };
+    const STATUS_CHIP = { bot: ['chip-bot', 'IA'], human: ['chip-human', 'Équipe'], closed: ['chip-closed', 'Traitée'] };
+    const ib = { filter: 'all', q: '', platform: '', current: null, conv: null, sending: false };
+    let agentName = '';
+    try { agentName = localStorage.getItem('agent-name') || ''; } catch {}
+
+    const shortTime = t => {
+      const d = new Date(t), now = new Date();
+      if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const y = new Date(now); y.setDate(now.getDate() - 1);
+      if (d.toDateString() === y.toDateString()) return 'Hier';
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    };
+    const initials = n => (String(n || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2) || '?').toUpperCase();
+    const avatar = c => `<span class="ib-avatar" aria-hidden="true">${escapeText(initials(c.name))}<span class="net net-${escapeText(c.platform)}">${NET_LETTER[c.platform] || '•'}</span></span>`;
+    const api = (path, body) => fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop: shopSlug, ...body }) } : undefined).then(async r => ({ ok: r.ok, data: await r.json().catch(() => ({})) }));
+
+    async function loadInbox() {
+      const params = new URLSearchParams({ shop: shopSlug, filter: ib.filter, q: ib.q, platform: ib.platform });
+      const { ok, data } = await api('/api/inbox?' + params).catch(() => ({ ok: false }));
+      if (!ok) { document.getElementById('ib-list').innerHTML = '<div class="ib-empty">Boîte de réception indisponible.</div>'; return; }
+      for (const [k, v] of Object.entries(data.counts)) { const el = document.querySelector(`[data-count="${k}"]`); if (el) el.textContent = v ? ' ' + v : ''; }
+      document.getElementById('tab-count-inbox').textContent = data.counts.needs || '';
+      const list = document.getElementById('ib-list');
+      list.innerHTML = data.conversations.length ? data.conversations.map(c => {
+        const [cls, label] = STATUS_CHIP[c.status] || STATUS_CHIP.bot;
+        const who = c.preview?.from === 'bot' ? 'IA : ' : c.preview?.from === 'agent' ? 'Vous : ' : '';
+        return `<button type="button" role="listitem" class="ib-item${c.needsHuman && c.status !== 'closed' ? ' needs' : ''}" data-id="${c.id}" aria-current="${c.id === ib.current}">
+          ${avatar(c)}
+          <span style="min-width:0"><span class="ib-name" style="display:block">${escapeText(c.name)}</span>
+            <span class="ib-prev" style="display:block">${escapeText(who + (c.preview?.text || ''))}</span>
+            ${c.needsHuman && c.status !== 'closed' ? `<span class="chip chip-flag" style="display:inline-block;margin-top:4px">⚑ ${escapeText(c.needsHumanReason || 'À traiter')}</span>` : ''}</span>
+          <span class="ib-meta"><span>${shortTime(c.lastAt)}</span>${c.unread ? `<span class="ib-unread">${c.unread}</span>` : ''}<span class="chip ${cls}">${label}</span></span>
+        </button>`;
+      }).join('') : `<div class="ib-empty">${ib.filter === 'needs' ? 'Rien à traiter. L’assistant gère tout. 👍' : 'Aucune conversation pour ce filtre.'}</div>`;
+    }
+
+    async function openConversation(id, { keepScroll } = {}) {
+      ib.current = id;
+      const { ok, data } = await api(`/api/inbox/conversation?shop=${encodeURIComponent(shopSlug)}&id=${encodeURIComponent(id)}`).catch(() => ({ ok: false }));
+      if (!ok) return;
+      const changed = !ib.conv || ib.conv.id !== id || ib.conv.messages.length !== data.conversation.messages.length || ib.conv.status !== data.conversation.status;
+      ib.conv = data.conversation;
+      document.getElementById('ib').classList.add('open');
+      if (changed) renderConversation(keepScroll);
+      document.querySelectorAll('.ib-item').forEach(b => b.setAttribute('aria-current', b.dataset.id === id));
+    }
+
+    function renderConversation(keepScroll) {
+      const c = ib.conv, main = document.getElementById('ib-main');
+      const draft = document.getElementById('ib-text')?.value || '';
+      const thread = document.getElementById('ib-thread');
+      const atBottom = !thread || thread.scrollHeight - thread.scrollTop - thread.clientHeight < 60;
+      const netName = PLATFORM_NAMES[c.platform] || c.platform;
+      let lastDay = '';
+      const msgs = c.messages.map(m => {
+        const day = new Date(m.at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+        const sep = day !== lastDay ? `<span class="ib-day">${day}</span>` : ''; lastDay = day;
+        if (m.from === 'system') return sep + `<div class="msg system">${escapeText(m.text)}</div>`;
+        const by = m.from === 'client' ? '' : `<span class="by">${m.from === 'bot' ? '🤖 Assistant IA' : '👤 ' + escapeText(m.agent || 'Équipe')}</span>`;
+        const time = new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        return sep + `<div class="msg ${m.from}">${by}${escapeText(m.text)}<span class="at">${time}${m.delivered === false ? ' · non remis' : ''}</span></div>`;
+      }).join('');
+      const human = c.status === 'human';
+      main.innerHTML = `
+        <div class="ib-head">
+          <button type="button" class="ib-btn back" id="ib-back">← Retour</button>
+          ${avatar(c)}
+          <div class="who"><div>${escapeText(c.name)}</div><div>${escapeText(netName)}${c.contact ? ' · +' + escapeText(c.contact.replace(/@.*/, '')) : ''} · client depuis le ${new Date(c.createdAt).toLocaleDateString('fr-FR')}</div></div>
+          <div class="ib-actions">
+            ${human ? '<button type="button" class="ib-btn" data-status="bot">🤖 Rendre à l’IA</button>' : '<button type="button" class="ib-btn primary" data-status="human">✋ Reprendre la main</button>'}
+            ${c.status !== 'closed' ? '<button type="button" class="ib-btn" data-status="closed">✓ Marquer traitée</button>' : ''}
+          </div>
+        </div>
+        ${c.needsHuman && c.status !== 'closed' ? `<div class="ib-banner flag">⚑ ${escapeText(c.needsHumanReason || 'Cette conversation demande votre attention.')}</div>` : ''}
+        ${human ? '<div class="ib-banner human">Vous avez la main : l’assistant IA ne répond plus à ce client. Il reprendra seul après 12 h sans réponse de votre part.</div>' : ''}
+        ${!c.canReplyFreely ? '<div class="ib-banner window">Plus de 24 h depuis le dernier message du client : le réseau n’autorise plus de message libre. Attendez qu’il vous réécrive.</div>' : ''}
+        <div class="ib-thread" id="ib-thread" aria-live="polite">${msgs}</div>
+        <details class="ib-card"${c.note || c.tags?.length ? ' open' : ''}><summary>Fiche client : notes et étiquettes</summary>
+          <input id="ib-tags" placeholder="Étiquettes séparées par des virgules (ex : VIP, livraison Bastos)" value="${escapeText((c.tags || []).join(', '))}">
+          <textarea id="ib-note" rows="2" placeholder="Note interne, jamais visible par le client">${escapeText(c.note || '')}</textarea>
+          <button type="button" class="ib-btn" id="ib-save-card" style="margin-top:8px">Enregistrer la fiche</button>
+        </details>
+        <form class="ib-compose" id="ib-form">
+          <textarea id="ib-text" rows="1" placeholder="${c.canReplyFreely ? 'Écrire au client… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)' : 'Envoi bloqué par la règle des 24 h'}" ${c.canReplyFreely ? '' : 'disabled'} aria-label="Votre réponse"></textarea>
+          <button class="ib-btn primary" ${c.canReplyFreely ? '' : 'disabled'}>Envoyer</button>
+        </form>
+        <div class="ib-compose hint" style="border:0;padding-top:0">Répondre vous donne automatiquement la main. Signé : <a href="#" id="ib-agent" style="color:#a5b4fc">${escapeText(agentName || 'Équipe')}</a></div>`;
+      const t = document.getElementById('ib-thread');
+      t.scrollTop = keepScroll && !atBottom ? t.scrollTop : t.scrollHeight;
+      document.getElementById('ib-text').value = draft;
+    }
+
+    async function setConvStatus(status) {
+      const { ok, data } = await api('/api/inbox/status', { id: ib.current, status, agent: agentName || 'L’équipe' });
+      if (ok) { ib.conv = data.conversation; renderConversation(); loadInbox(); }
+    }
+
+    async function sendReply(e) {
+      e.preventDefault();
+      const box = document.getElementById('ib-text'), text = box.value.trim();
+      if (!text || ib.sending) return;
+      ib.sending = true;
+      const { ok, data } = await api('/api/inbox/reply', { id: ib.current, text, agent: agentName || 'Équipe' }).catch(() => ({ ok: false, data: {} }));
+      ib.sending = false;
+      if (!ok) { alert(data.error || 'Envoi impossible.'); return; }
+      box.value = '';
+      ib.conv = data.conversation; renderConversation(); loadInbox();
+    }
+
+    // Délégation d'événements : le panneau est réécrit à chaque mise à jour
+    document.getElementById('ib-list').addEventListener('click', e => { const b = e.target.closest('.ib-item'); if (b) { ib.conv = null; openConversation(b.dataset.id).then(loadInbox); } });
+    document.getElementById('ib-main').addEventListener('click', async e => {
+      if (e.target.closest('#ib-back')) { document.getElementById('ib').classList.remove('open'); ib.current = null; loadInbox(); }
+      const s = e.target.closest('[data-status]'); if (s) setConvStatus(s.dataset.status);
+      if (e.target.closest('#ib-agent')) {
+        e.preventDefault();
+        const name = prompt('Votre prénom, affiché dans l’historique (jamais envoyé au client) :', agentName);
+        if (name !== null) { agentName = name.trim().slice(0, 40); try { localStorage.setItem('agent-name', agentName); } catch {} renderConversation(true); }
+      }
+      if (e.target.closest('#ib-save-card')) {
+        const tags = document.getElementById('ib-tags').value.split(',');
+        const { ok, data } = await api('/api/inbox/update', { id: ib.current, note: document.getElementById('ib-note').value, tags });
+        if (ok) { ib.conv = data.conversation; e.target.textContent = 'Fiche enregistrée ✓'; loadInbox(); }
+      }
+    });
+    document.getElementById('ib-main').addEventListener('submit', e => { if (e.target.id === 'ib-form') sendReply(e); });
+    document.getElementById('ib-main').addEventListener('keydown', e => {
+      if (e.target.id === 'ib-text' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('ib-form').requestSubmit(); }
+    });
+    document.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => {
+      ib.filter = b.dataset.filter;
+      document.querySelectorAll('[data-filter]').forEach(x => x.setAttribute('aria-pressed', x === b));
+      loadInbox();
+    }));
+    let searchTimer;
+    document.getElementById('ib-search').addEventListener('input', e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ib.q = e.target.value; loadInbox(); }, 250); });
+    document.getElementById('ib-platform').addEventListener('change', e => { ib.platform = e.target.value; loadInbox(); });
+
+    // Rafraîchissement en direct
+    setInterval(() => {
+      if (document.hidden) return;
+      loadInbox();
+      if (ib.current && !document.getElementById('ib').hidden) openConversation(ib.current, { keepScroll: true });
+    }, 4000);
+
+    let startTab = 'inbox';
+    try { startTab = localStorage.getItem('dash-tab') || 'inbox'; } catch {}
+    showTab(['inbox', 'stats', 'settings'].includes(startTab) ? startTab : 'inbox');
+    loadInbox();
+
     loadShopData();
+    loadAnalytics();
+    setInterval(loadAnalytics, 60000);
+    checkWhatsAppStatus();
+    setInterval(checkWhatsAppStatus, 4000);
   </script>
-</body>
+<section data-tab="settings" hidden style="padding:20px;border:1px solid #64748b;margin:20px auto;max-width:1120px;border-radius:16px"><h2>Identité de mon assistant</h2><img id="identity-logo" alt="Logo de mon entreprise" hidden style="width:64px;height:64px;object-fit:contain"><form id="identity-form"><label>Nom de votre entreprise <input name="businessName" required></label><br><label>Nom de votre assistant <input name="botName" required></label><br><label>Logo (adresse HTTPS) <input name="logoUrl" type="url"></label><br><label>E-mail de contact <input name="supportEmail" type="email"></label><br><label>Informations de référence <textarea name="customDocs" rows="5"></textarea></label><br><button>Enregistrer mon identité</button><p id="identity-status" role="status"></p></form></section><script>
+(async function(){const form=document.getElementById('identity-form'),shop=new URLSearchParams(location.search).get('shop')||'ye_almanach';try{const r=await fetch('/api/merchants/details?shop='+encodeURIComponent(shop));const d=await r.json();for(const el of form.elements)if(el.name)el.value=d.merchant?.[el.name]||'';const logo=document.getElementById('identity-logo');if(/^https:\/\//.test(d.merchant?.logoUrl||'')){logo.src=d.merchant.logoUrl;logo.hidden=false;}}catch{}
+form.onsubmit=async function(e){e.preventDefault();try{const r=await fetch('/api/merchants/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shop,...Object.fromEntries(new FormData(form))})});document.getElementById('identity-status').textContent=r.ok?'Identité enregistrée.':'Enregistrement impossible.';}catch{document.getElementById('identity-status').textContent='Connexion indisponible.';}};})();
+</script></body>
 </html>

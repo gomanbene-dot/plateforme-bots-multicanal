@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head>
+<head><script>
+const nativeFetch=window.fetch.bind(window);
+window.fetch=async function(input,options={}){
+ const target=new URL(typeof input==='string'?input:input.url,location.href);
+ if(target.origin===location.origin && target.pathname.startsWith('/api/')){
+  const token=sessionStorage.getItem('bot-access');
+  if(!token){location.href='/connexion?next='+encodeURIComponent(location.pathname+location.search);throw Error('Connexion requise');}
+  options.headers=new Headers(options.headers);options.headers.set('Authorization','Bearer '+token);
+ }
+ const response=await nativeFetch(input,options);
+ if(response.status===401){sessionStorage.removeItem('bot-access');location.href='/connexion';}
+ return response;
+};
+</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Simulateur Bot IA Omnicanal (WhatsApp, Telegram, Messenger)</title>
@@ -543,8 +556,8 @@
         <div class="phone-header">
           <div class="avatar" id="bot-avatar">🤖</div>
           <div class="header-info">
-            <h3 id="bot-name">Sarah (Conseillère YE)</h3>
-            <p id="bot-status">● En ligne 24h/24 (DeepSeek IA)</p>
+            <h3 id="bot-name">Assistant virtuel YE</h3>
+            <p id="bot-status">Simulateur — connexion des réseaux à vérifier</p>
           </div>
           <button onclick="clearChat()" style="background: none; border: none; color: #8696a0; cursor: pointer; font-size: 18px;" title="Effacer la conversation">🗑️</button>
         </div>
@@ -654,7 +667,7 @@
 
       if (profile === 'ye') {
         avatar.innerText = '🎓';
-        name.innerText = 'Sarah (Conseillère YE)';
+        name.innerText = 'Assistant virtuel YE';
       } else if (profile === 'boutique') {
         avatar.innerText = '👗';
         name.innerText = 'Chantal (Élégance & Style)';
@@ -682,7 +695,7 @@
 
     function injectWelcomeMessage() {
       if (currentProfile === 'ye') {
-        addMessage("bot", "Bonjour et bienvenue chez YE (Almanach) ! 📚✨ Je suis Sarah, votre conseillère pédagogique. Comment puis-je vous aider pour la réussite scolaire de votre enfant ?");
+        addMessage("bot", "Bonjour. Je suis l’assistant virtuel YE. Je peux vous renseigner sur l’installation, les cours et les fiches de lecture.");
       } else if (currentProfile === 'boutique') {
         addMessage("bot", "Bonjour et bienvenue chez Élégance & Style ! 👗✨ Je suis Chantal, à votre service. Que recherchez-vous aujourd'hui ?");
       } else {
@@ -696,7 +709,8 @@
       msgDiv.className = `message ${sender}`;
       
       const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      msgDiv.innerHTML = `${text}<span class="time">${time}</span>`;
+      msgDiv.textContent = text;
+        const stamp=document.createElement('span');stamp.className='time';stamp.textContent=time;msgDiv.appendChild(stamp);
       
       chatBox.appendChild(msgDiv);
       chatBox.scrollTop = chatBox.scrollHeight;
@@ -738,6 +752,8 @@
         
         if (data && data.reply) {
           addMessage('bot', data.reply);
+        } else if (data && data.humanMode) {
+          // Un membre de l'équipe a repris la conversation : sa réponse arrivera via pollTeamReplies()
         } else {
           addMessage('bot', "Désolé, une petite erreur est survenue.");
         }
@@ -746,6 +762,19 @@
         addMessage('bot', "Erreur de communication avec le serveur.");
       }
     }
+
+    // Réponses envoyées par l'équipe depuis la boîte de réception unifiée
+    async function pollTeamReplies() {
+      if (document.hidden) return;
+      try {
+        const shop = new URLSearchParams(location.search).get('shop') || '';
+        const res = await fetch(`/api/chat/pending?platform=${encodeURIComponent(currentChannel)}&userId=${encodeURIComponent(userId)}${shop ? '&shop=' + encodeURIComponent(shop) : ''}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        for (const m of data.messages || []) addMessage('bot', m.text);
+      } catch (e) {}
+    }
+    setInterval(pollTeamReplies, 3000);
 
     function clearChat() {
       document.getElementById('chat-box').innerHTML = '';

@@ -22,6 +22,7 @@ export class DeepSeekEngine {
       try {
         const response = await fetch(`${this.baseUrl}/chat/completions`, {
           method: 'POST',
+          signal: AbortSignal.timeout(20000),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey.trim()}`
@@ -72,12 +73,7 @@ export class DeepSeekEngine {
       }
     }
 
-    // 3. Moteur Local Contextuel (Mode Sans Clé API)
-    return {
-      text: this._generateLocalSmartResponse(messages),
-      provider: 'local-smart-engine',
-      model: 'local-knowledge-engine'
-    };
+    throw new Error('AI_PROVIDER_UNAVAILABLE');
   }
 
   async _callGeminiFallback(messages, apiKey) {
@@ -112,31 +108,6 @@ export class DeepSeekEngine {
   }
 
   /**
-   * Moteur local enrichi capable de répondre intelligemment sur l'application YE et les commerces
+   * Moteur local sobre capable de répondre poliment sur l'application YE
    */
-  _generateLocalSmartResponse(messages) {
-    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.toLowerCase() || '';
-
-    if (lastUserMessage.includes('qui es tu') || lastUserMessage.includes('qui est tu') || lastUserMessage.includes('t\'es qui') || lastUserMessage.includes('tu es qui')) {
-      return "Je suis Sarah, la conseillère d'orientation et d'accompagnement de l'application éducative **YE (Almanach)** ! 📚✨\n\nMon rôle est de vous aider à découvrir nos outils pour garantir la réussite scolaire de votre enfant de la 6ème à la Terminale. En quelle classe est votre enfant ?";
-    }
-
-    if (lastUserMessage.includes('appli') || lastUserMessage.includes('application') || lastUserMessage.includes('en dire plus') || lastUserMessage.includes('c\'est quoi') || lastUserMessage.includes('fonctionne')) {
-      return "L'application **YE (Almanach)** est le répétiteur virtuel intelligent n°1 au Cameroun ! 🚀\n\n✅ **100% Hors-Ligne** : zéro connexion Internet nécessaire pour réviser.\n✅ **De la 6ème à la Terminale** (Toutes séries & anglophone Form 1 - Upper 6th).\n✅ **Cours complets, résumés, quiz et corrigés d'examens** (BEPC, Probatoire, Bac, GCE).\n✅ **Tuteur IA 24h/24** pour expliquer les devoirs.\n\nSouhaitez-vous le lien pour la tester gratuitement ?";
-    }
-
-    if (lastUserMessage.includes('prix') || lastUserMessage.includes('tarif') || lastUserMessage.includes('combien') || lastUserMessage.includes('payer') || lastUserMessage.includes('abonnement')) {
-      return "Nos tarifs sont pensés pour être accessibles à tous les parents : 💎\n\n📌 **Mensuel** : 2.500 FCFA / mois\n📌 **Trimestriel** : 6.000 FCFA / trimestre\n📌 **Annuel (Recommandé)** : 15.000 FCFA / an (soit seulement 1.250 FCFA/mois !)\n\n💳 Paiement direct par **Orange Money** et **MTN Mobile Money**.";
-    }
-
-    if (lastUserMessage.includes('lien') || lastUserMessage.includes('telecharger') || lastUserMessage.includes('télécharger') || lastUserMessage.includes('installer') || lastUserMessage.includes('play store')) {
-      return "Voici le lien officiel pour installer l'application sur votre téléphone Android : 📲\n\n👉 **Télécharger sur le Play Store :** https://play.google.com/store/apps/details?id=cm.ye.almanach\n\nInstallez-la et testez gratuitement les premiers chapitres !";
-    }
-
-    if (lastUserMessage.includes('bonjour') || lastUserMessage.includes('salut') || lastUserMessage.includes('bonsoir') || lastUserMessage.includes('/start')) {
-      return "Bonjour et bienvenue chez **YE (Almanach)** ! 📚✨ Je suis Sarah, votre conseillère pédagogique.\n\nComment puis-je vous aider aujourd'hui ? (Présentation de l'app, tarifs, lien de téléchargement, classes disponibles...)";
-    }
-
-    return "Merci pour votre message ! 😊 Chez **YE (Almanach)**, nous accompagnons les élèves de la 6ème à la Terminale avec des cours et exercices 100% hors-ligne.\n\nSouhaitez-vous connaître nos tarifs ou obtenir le lien de téléchargement gratuit ?";
-  }
 }

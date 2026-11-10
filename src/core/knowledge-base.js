@@ -12,6 +12,28 @@ export class KnowledgeBase {
    */
   static buildEnhancedSystemPrompt(config, platform = 'whatsapp') {
     let prompt = config.systemPrompt || '';
+    prompt += '\nIdentité : assistant virtuel nommé ' + (config.botName || 'Assistant') + '. Contact officiel : ' + (config.supportChannel || config.supportEmail || 'non renseigné') + '. Ne pas inventer de faits ni reprendre le contexte d’une autre entreprise.';
+
+    // Injection des paramètres de style et de ton
+    if (config.styleSettings) {
+      prompt += `\n\n### 🎭 DIRECTIVES STRICTES DE STYLE ET DE TON :`;
+      
+      if (config.styleSettings.emojiLevel === 'none') {
+        prompt += `\n- INTERDICTION FORMELLE D'ÉMOJIS : N'utilise AUCUN émoji, smiley ou symbole graphique (pas de fusée, pas d'étoile, pas de coche). Ton texte doit être 100% sobre et professionnel.`;
+      } else if (config.styleSettings.emojiLevel === 'minimal') {
+        prompt += `\n- ÉMOJIS MINIMAUX : Maximum 1 émoji discret dans tout le message, uniquement si cela apporte une valeur réelle.`;
+      }
+
+      if (config.styleSettings.register === 'professionnel_courtois') {
+        prompt += `\n- REGISTRE DE LANGUE : Professionnel, soigné, digne et respectueux. Vouvoie systématiquement le client.`;
+      } else if (config.styleSettings.register === 'naturel_direct') {
+        prompt += `\n- REGISTRE DE LANGUE : Naturel, clair et direct. Pas de phrases pompeuses, parle comme un vrai interlocuteur humain.`;
+      }
+
+      if (config.styleSettings.customDirectives) {
+        prompt += `\n- CONSIGNES PARTICULIÈRES : ${config.styleSettings.customDirectives}`;
+      }
+    }
 
     prompt += `\n\n--- INFORMATIONS OFFICIELLES ET CONTEXTE (BASE DE CONNAISSANCES) ---`;
     prompt += `\n- Canal actuel : ${platform.toUpperCase()}`;

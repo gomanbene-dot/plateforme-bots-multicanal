@@ -6,6 +6,7 @@
 import { DeepSeekEngine } from './deepseek-engine.js';
 import { KnowledgeBase } from './knowledge-base.js';
 import { SessionManager } from './session-manager.js';
+import { classifyIntent, isEscalation } from './analytics.js';
 
 export class AiBrain {
   constructor(defaultConfig = {}, options = {}) {
@@ -38,7 +39,8 @@ export class AiBrain {
   getMerchantConfig(slug) {
     if (!slug) return this.defaultConfig;
     const cleanSlug = slug.toLowerCase().trim();
-    return this.merchantCache.get(cleanSlug) || this.defaultConfig;
+    if (cleanSlug === this.defaultConfig.id) return this.defaultConfig;
+    return this.merchantCache.get(cleanSlug) || null;
   }
 
   /**
@@ -51,33 +53,38 @@ export class AiBrain {
 
     const cleanMessage = incomingMessage.trim();
     const userName = contextOverrides.userName || 'Client';
+    // Le canal appartient à une entreprise ; un visiteur ne peut pas le réaffecter.
+    const target = contextOverrides.merchantSlug || this.defaultConfig.id;
+    const activeConfig = this.getMerchantConfig(target);
+    if (!activeConfig) return 'Cet assistant est indisponible. Vérifiez le lien de votre entreprise.';
+    const startedAt = Date.now();
+    const track = (reply, outcome) => this.track(target, { contact: platform + ':' + senderKey, platform, message: cleanMessage, reply, outcome, latencyMs: Date.now() - startedAt });
+    const rawKey = String(senderKey);
+    const contact = rawKey.startsWith(platform + ':') ? rawKey.slice(platform.length + 1) : rawKey;
+    senderKey = JSON.stringify([target, platform, senderKey]);
     const session = this.sessionManager.getSession(senderKey);
 
-    // 1. Détection du Deep-Linking (ex: "/start boutique_kfashion" ou "START=boutique_kfashion")
-    if (cleanMessage.startsWith('/start') || cleanMessage.startsWith('START=')) {
-      const parts = cleanMessage.split(/[\s=]+/);
-      if (parts.length > 1) {
-        const potentialSlug = parts[1].toLowerCase().trim();
-        if (this.merchantCache.has(potentialSlug)) {
-          session.activeMerchantSlug = potentialSlug;
-          console.log(`[DeepLink] Utilisateur ${senderKey} rattaché à la boutique : ${potentialSlug}`);
-        }
-      }
-    }
+    // 1. Boîte de réception unifiée : chaque message client y est rangé, quel que soit le réseau
+    const convId = this.inboxCall(i => i.recordIncoming(target, { platform, contact, name: userName, text: cleanMessage, sessionKey: senderKey, delivery: contextOverrides.delivery }).id);
+    const out = text => { if (convId && text) this.inboxCall(i => i.recordOutgoing(target, convId, { from: 'bot', text })); return text; };
 
-    // Déterminer la boutique active pour cette conversation
-    const activeSlug = contextOverrides.merchantSlug || session.activeMerchantSlug;
-    const activeConfig = this.getMerchantConfig(activeSlug);
+    // Un membre de l'équipe a repris la main : l'IA se tait mais garde le fil pour la suite
+    if (convId && this.inboxCall(i => i.isHumanActive(target, convId))) {
+      this.sessionManager.recordUserMessage(senderKey, cleanMessage);
+      track(null, 'human');
+      return null;
+    }
 
     // 2. Vérification des commandes de contrôle (#stop, #pause, #play)
     const controlResult = this.sessionManager.checkControlCommands(senderKey, cleanMessage);
     if (controlResult === 'PAUSED_SILENT') return null;
-    if (controlResult) return controlResult;
+    if (controlResult) return out(controlResult);
 
     // 3. Vérification des crédits de la boutique
     if (activeConfig.credits_remaining !== undefined && activeConfig.credits_remaining <= 0) {
-      const paymentUrl = `https://plateforme-bots-multicanal-production.up.railway.app/recharge?shop=${activeConfig.slug || 'default'}`;
-      return `⚠️ L'assistant IA de ${activeConfig.businessName || 'cette boutique'} a épuisé ses crédits d'essai gratuits.\n\n👉 Pour recharger l'assistant (dès 500 FCFA), cliquez ici : ${paymentUrl}`;
+      track(null, 'no_credit');
+      if (convId) this.inboxCall(i => i.flag(target, convId, 'Crédits épuisés : le client attend une réponse'));
+      return out('Cet assistant est temporairement indisponible. Contactez directement l’entreprise.');
     }
 
     // Décrémenter les crédits si applicable
@@ -92,9 +99,12 @@ export class AiBrain {
     // 5. Construire le prompt enrichi avec les informations de la boutique choisie
     let systemPrompt = KnowledgeBase.buildEnhancedSystemPrompt(activeConfig, platform);
     systemPrompt += `\n\n### ⚡ DIRECTIVES DE RÉPONSE EXPRESS :`;
-    systemPrompt += `\n- Le client s'appelle : "${userName}". Salue-le chaleureusement par son nom si opportun.`;
-    systemPrompt += `\n- **LONGUEUR MAXIMALE : 2 à 3 phrases courtes maximum**. Aéré, direct et facile à lire sur smartphone.`;
-    systemPrompt += `\n- Réponds UNIQUEMENT sur les produits et conditions de ${activeConfig.businessName || 'notre service'}.`;
+    systemPrompt += `\n- Le client s'appelle : "${userName}". Salue-le avec respect si opportun.`;
+    systemPrompt += `\n- **LONGUEUR : 2 à 3 phrases courtes et fluides maximum**. Pas de pavés.`;
+    if (activeConfig.styleSettings?.emojiLevel === 'none') {
+      systemPrompt += `\n- **INTERDICTION D'ÉMOJIS : N'inclus ABSOLUMENT AUCUN émoji ni symbole graphique**. Zéro fusée, zéro coche, zéro étoile. Texte pur naturel.`;
+    }
+    systemPrompt += `\n- Réponds UNIQUEMENT sur les caractéristiques et conditions de ${activeConfig.businessName || activeConfig.brandName || 'notre service'}.`;
 
     // 6. Préparer les messages pour DeepSeek
     const history = this.sessionManager.getFormattedHistory(senderKey);
@@ -126,13 +136,44 @@ export class AiBrain {
       });
       if (activeConfig.recentConversations.length > 50) activeConfig.recentConversations.pop();
 
-      return replyText;
+      track(replyText);
+      if (convId) {
+        const intent = classifyIntent(cleanMessage);
+        const reason = intent === 'reclamation' ? 'Réclamation du client'
+          : isEscalation(replyText) ? 'L’assistant n’a pas su répondre'
+          : intent === 'commande' ? 'Client prêt à acheter' : null;
+        if (reason) this.inboxCall(i => i.flag(target, convId, reason));
+      }
+      return out(replyText);
     } catch (error) {
       console.error(`[AiBrain] Erreur pour ${senderKey} :`, error);
-      const fallback = `Bonjour ${userName} ! Bienvenue chez ${activeConfig.businessName || 'nous'}. Comment puis-je vous aider ? ✨`;
+      if (activeConfig.credits_remaining !== undefined) activeConfig.credits_remaining++;
+      const fallback = 'Le service de réponse est momentanément indisponible.' + (activeConfig.supportEmail ? ' Contact : ' + activeConfig.supportEmail : ' Contactez directement cette entreprise.');
       this.sessionManager.recordAssistantMessage(senderKey, fallback);
-      return fallback;
+      track(fallback, 'error');
+      if (convId) this.inboxCall(i => i.flag(target, convId, 'Service IA indisponible'));
+      return out(fallback);
     }
+  }
+
+  /** Appel protégé à la boîte de réception : une erreur de stockage ne bloque jamais la réponse. */
+  inboxCall(fn) {
+    if (!this.inbox) return null;
+    try { return fn(this.inbox); } catch (err) { console.warn('[Inbox]', err.message); return null; }
+  }
+
+  /** Ajoute la réponse d'un humain à l'historique IA, pour que l'assistant reprenne avec le contexte. */
+  recordAgentMessage(sessionKey, text) {
+    if (sessionKey) this.sessionManager.recordAssistantMessage(sessionKey, text);
+  }
+
+  /**
+   * Transmet l'échange au module d'analyse s'il est branché ; une erreur d'écriture
+   * ne doit jamais empêcher le client de recevoir sa réponse.
+   */
+  track(slug, event) {
+    if (!this.analytics) return;
+    try { this.analytics.record(slug, event); } catch (err) { console.warn('[Analytics]', err.message); }
   }
 
   getMerchantConversations(slug) {

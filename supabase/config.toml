@@ -1,0 +1,4 @@
+project_id = "fcowwopbzkmjdyhqyufw"
+[functions.ye-messenger]
+# Meta signe chaque POST en HMAC ; le panneau technique utilise un secret distinct.
+verify_jwt = false

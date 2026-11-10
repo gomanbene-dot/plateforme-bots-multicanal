@@ -13,3 +13,11 @@ yarn-error.log*
 *.log
 .DS_Store
 Thumbs.db
+
+# Sessions WhatsApp Web (Baileys)
+auth_sessions/
+
+.private/
+
+# Cache de la CLI Supabase
+supabase/.temp/

@@ -4,7 +4,7 @@
 
 export class MetaAdapter {
   constructor(options = {}) {
-    this.verifyToken = options.verifyToken || process.env.META_VERIFY_TOKEN || 'ye_multicanal_verify_token_2026';
+    this.verifyToken = options.verifyToken || process.env.META_VERIFY_TOKEN || '';
     this.pageAccessToken = options.pageAccessToken || process.env.META_PAGE_ACCESS_TOKEN || '';
   }
 
@@ -16,7 +16,7 @@ export class MetaAdapter {
     const token = urlSearchParams.get('hub.verify_token');
     const challenge = urlSearchParams.get('hub.challenge');
 
-    if (mode === 'subscribe' && token === this.verifyToken) {
+    if (mode === 'subscribe' && this.verifyToken && token === this.verifyToken) {
       return { success: true, challenge };
     }
     return { success: false, challenge: null };
@@ -25,10 +25,14 @@ export class MetaAdapter {
   /**
    * Extrait le message Messenger ou Instagram
    */
+  parseIncomingWebhooks(body) {
+    return (body?.entry || []).flatMap(entry => (entry.messaging || []).map(messaging => this.parseIncomingWebhook({entry:[{messaging:[messaging]}]}))).filter(Boolean);
+  }
+
   parseIncomingWebhook(body) {
     try {
       const messaging = body?.entry?.[0]?.messaging?.[0];
-      if (!messaging || !messaging.message || !messaging.message.text) return null;
+      if (!messaging || !messaging.message || !messaging.message.text || messaging.message.is_echo) return null;
 
       return {
         messageId: messaging.message.mid,
@@ -46,17 +50,18 @@ export class MetaAdapter {
   /**
    * Envoi d'un message sur Messenger ou Instagram Direct
    */
-  async sendMessage(recipientId, text, customToken = null) {
+  async sendMessage(recipientId, text, customToken = null, channel = {}) {
     const token = customToken || this.pageAccessToken;
     if (!token) {
       console.log(`[Meta Messenger/IG Local Mode] Réponse prête pour ${recipientId} : "${text}"`);
-      return { success: true, mode: 'simulated' };
+      return { success: false, error: 'CHANNEL_NOT_CONFIGURED' };
     }
 
     try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/me/messages?access_token=${token}`, {
+      const res = await fetch(`https://${channel.instagramLogin ? 'graph.instagram.com' : 'graph.facebook.com'}/${process.env.META_GRAPH_VERSION || 'v23.0'}/${encodeURIComponent(channel.accountId || 'me')}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15000),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer '+token },
         body: JSON.stringify({
           recipient: { id: recipientId },
           message: { text: text }
