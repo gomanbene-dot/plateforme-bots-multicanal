@@ -8,6 +8,8 @@ import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import { TenantRegistry } from './core/tenant-registry.js';
 import { Analytics } from './core/analytics.js';
 import { Inbox } from './core/inbox.js';
+import { ChannelVault } from './core/channel-vault.js';
+import { ChannelConnector } from './core/channel-connect.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,23 +72,39 @@ async function deliverAgentMessage(slug, conv, text){
     if(slug!==yeEducationConfig.id)return {success:false,error:'Ce numéro WhatsApp n’appartient pas à cette entreprise'};
     return {success:ok(await whatsappBaileys.sendMessage(d.to,text)),error:'WhatsApp non connecté'};
   }
-  if(d.via==='telegram')return {success:ok(await telegramAdapter.sendMessage(d.to,text)),error:'Envoi Telegram impossible'};
+  if(d.via==='telegram'){
+    if(d.channelId){
+      const ch=channelFor('telegram',d.channelId);
+      if(!ch||ch.merchantSlug!==slug)return {success:false,error:'Bot Telegram non connecté à cette entreprise'};
+      return {success:ok(await telegramAdapter.sendMessage(d.to,text,ch.token)),error:'Envoi Telegram impossible'};
+    }
+    if(slug!==yeEducationConfig.id)return {success:false,error:'Bot Telegram non connecté à cette entreprise'};
+    return {success:ok(await telegramAdapter.sendMessage(d.to,text)),error:'Envoi Telegram impossible'};
+  }
   if(d.via==='cloud'||d.via==='meta'){
     const ch=channelFor(conv.platform,d.channelId);
     if(!ch||ch.merchantSlug!==slug)return {success:false,error:'Canal non connecté à cette entreprise'};
     const r=d.via==='cloud'
-      ?await whatsappAdapter.sendMessage(d.to,text,process.env[ch.tokenEnv],d.channelId)
-      :await metaAdapter.sendMessage(d.to,text,process.env[ch.tokenEnv],ch);
+      ?await whatsappAdapter.sendMessage(d.to,text,ch.token,ch.sendId)
+      :await metaAdapter.sendMessage(d.to,text,ch.token,ch);
     return {success:ok(r),error:'Le réseau a refusé l’envoi'};
   }
   return {success:false,error:'Canal de réponse inconnu pour cette conversation'};
 }
+
+// Réseaux connectés : d'abord le coffre chiffré (connexion en un clic),
+// puis l'ancien fichier channels.json (jetons en variables d'environnement) pour compatibilité.
+const vault=new ChannelVault(registry.dir);
+const connector=new ChannelConnector({vault});
 const routesFile=path.join(registry.dir,'channels.json');
 const channelRoutes=fs.existsSync(routesFile)?JSON.parse(fs.readFileSync(routesFile,'utf8')):{};
 function channelFor(platform,id){
+ if(!id)return null;
+ const v=vault.resolve(platform,id);
+ if(v&&yeBrain.getMerchantConfig(v.merchantSlug))return {...v,accountId:v.sendId};
  const row=channelRoutes[platform+':'+id];
  if(!row || !yeBrain.getMerchantConfig(row.merchantSlug) || !process.env[row.tokenEnv])return null;
- return row;
+ return {...row,token:process.env[row.tokenEnv],sendId:row.accountId||id};
 }
 for(const [slug,row] of Object.entries(registry.data))yeBrain.registerMerchant(slug,row.config);
 
@@ -120,6 +138,10 @@ const server = http.createServer(async (req, res) => {
     req.parsedBody=await parseJsonBody(req);
     if(url.pathname==='/webhook/telegram'){
       if(!process.env.TELEGRAM_WEBHOOK_SECRET || req.headers['x-telegram-bot-api-secret-token']!==process.env.TELEGRAM_WEBHOOK_SECRET){res.writeHead(403);res.end();return;}
+    }else if(url.pathname.startsWith('/webhook/telegram/')){
+      // Bot Telegram d'une entreprise : chaque bot a son propre secret, vérifié par le coffre
+      req.telegramChannel=vault.checkSecret('telegram',url.pathname.split('/')[3],req.headers['x-telegram-bot-api-secret-token']);
+      if(!req.telegramChannel||!yeBrain.getMerchantConfig(req.telegramChannel.merchantSlug)){res.writeHead(403);res.end();return;}
     }else{
       if(!process.env.META_APP_SECRET){res.writeHead(503);res.end('Configuration Meta manquante');return;}
       const expected='sha256='+createHmac('sha256',process.env.META_APP_SECRET).update(req.rawBody).digest('hex');
@@ -379,13 +401,43 @@ const server = http.createServer(async (req, res) => {
       const reply = await yeBrain.processMessage(`whatsapp:${parsed.from}`, parsed.text, 'whatsapp', { userName: parsed.userName, merchantSlug: channel.merchantSlug, delivery: { via: 'cloud', to: parsed.from, channelId: parsed.recipientPhoneId } });
       if (reply) {
         console.log(`[WhatsApp Out] Réponse générée : "${reply}"`);
-        const sent=await whatsappAdapter.sendMessage(parsed.from,reply,process.env[channel.tokenEnv],parsed.recipientPhoneId);
+        const sent=await whatsappAdapter.sendMessage(parsed.from,reply,channel.token,parsed.recipientPhoneId);
         if(!sent.success){res.writeHead(502);res.end('Envoi impossible');return;}
       }
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'received' }));
+    return;
+  }
+
+  // 4.A. WEBHOOK D'UN BOT TELEGRAM D'ENTREPRISE (POST /webhook/telegram/<id du bot>)
+  if (req.method === 'POST' && req.telegramChannel) {
+    const ch = req.telegramChannel;
+    const parsed = telegramAdapter.parseIncomingWebhook(req.parsedBody);
+    if (parsed && parsed.text) {
+      const reply = await yeBrain.processMessage(`telegram:${parsed.chatId}`, parsed.text, 'telegram', { userName: parsed.fromName, merchantSlug: ch.merchantSlug, delivery: { via: 'telegram', to: parsed.chatId, channelId: ch.routeId } });
+      if (reply) await telegramAdapter.sendMessage(parsed.chatId, reply, ch.token);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'received' }));
+    return;
+  }
+
+  // 4.B. RETOUR DE FACEBOOK APRÈS CONNEXION D'UN RÉSEAU (GET /oauth/meta/callback)
+  // Public (le navigateur revient de Facebook) mais protégé par l'état signé du lien de connexion.
+  if (req.method === 'GET' && url.pathname === '/oauth/meta/callback') {
+    let shop = '', hash = '#channels', query = '';
+    try {
+      const r = await connector.handleCallback({ code: url.searchParams.get('code'), state: url.searchParams.get('state'), error: url.searchParams.get('error') });
+      shop = r.shop;
+      query = r.cancelled ? '&cancelled=1' : r.pendingId ? '&choose=' + r.pendingId : '&connected=' + encodeURIComponent(r.platform);
+    } catch (e) {
+      try { shop = connector.verifyState(url.searchParams.get('state')).shop; } catch {}
+      query = '&error=' + encodeURIComponent(e.message.slice(0, 300));
+    }
+    res.writeHead(302, { Location: `/dashboard?shop=${encodeURIComponent(shop)}${query}${hash}`, 'Cache-Control': 'no-store' });
+    res.end();
     return;
   }
 
@@ -424,7 +476,7 @@ const server = http.createServer(async (req, res) => {
       const reply = await yeBrain.processMessage(`${platform}:${parsed.senderId}`, parsed.text, platform, {merchantSlug:channel.merchantSlug, delivery:{via:'meta', to:parsed.senderId, channelId:parsed.recipientId}});
       if (reply) {
         console.log(`[${platform.toUpperCase()} Out] Réponse générée : "${reply}"`);
-        const sent=await metaAdapter.sendMessage(parsed.senderId,reply,process.env[channel.tokenEnv],channel);
+        const sent=await metaAdapter.sendMessage(parsed.senderId,reply,channel.token,channel);
         if(!sent.success){res.writeHead(502);res.end('Envoi impossible');return;}
       }
     }
@@ -543,25 +595,59 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/channels' && req.method === 'GET') {
     const shopSlug = url.searchParams.get('shop');
     if (!yeBrain.getMerchantConfig(shopSlug)) { res.writeHead(404); res.end('{}'); return; }
-    const connected = {};
+    const accounts = { whatsapp: [], messenger: [], instagram: [], telegram: [] };
+    for (const a of vault.listFor(shopSlug)) accounts[a.platform]?.push({ routeId: a.routeId, name: a.name, connectedAt: a.connectedAt });
     for (const [key, row] of Object.entries(channelRoutes)) {
-      const [platform] = key.split(':');
-      if (row.merchantSlug === shopSlug && process.env[row.tokenEnv]) connected[platform] = true;
+      const [platform, id] = key.split(':');
+      if (row.merchantSlug === shopSlug && process.env[row.tokenEnv] && accounts[platform]) accounts[platform].push({ routeId: id, name: 'Configuré par la plateforme', legacy: true });
     }
     const isYe = shopSlug === yeEducationConfig.id;
+    const qrConnected = isYe && whatsappBaileys.getStatus().status === 'CONNECTED';
+    const legacyTelegram = isYe && !!process.env.TELEGRAM_BOT_TOKEN && !!process.env.TELEGRAM_WEBHOOK_SECRET;
+    const ready = connector.status();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({
       success: true,
       admin: !!actor.admin,
+      ready,
       channels: {
-        whatsapp: { connected: !!connected.whatsapp || (isYe && whatsappBaileys.getStatus().status === 'CONNECTED'), mode: connected.whatsapp ? 'api' : (isYe ? 'qr' : null) },
-        messenger: { connected: !!connected.messenger },
-        instagram: { connected: !!connected.instagram },
-        telegram: { connected: isYe && !!process.env.TELEGRAM_BOT_TOKEN && !!process.env.TELEGRAM_WEBHOOK_SECRET },
+        whatsapp: { connected: accounts.whatsapp.length > 0 || qrConnected, accounts: accounts.whatsapp, mode: isYe ? 'qr' : null },
+        messenger: { connected: accounts.messenger.length > 0, accounts: accounts.messenger },
+        instagram: { connected: accounts.instagram.length > 0, accounts: accounts.instagram },
+        telegram: { connected: accounts.telegram.length > 0 || legacyTelegram, accounts: accounts.telegram },
         web: { connected: true, link: `/?shop=${encodeURIComponent(shopSlug)}` }
       }
     }));
     return;
+  }
+
+  // 7.A.2 CONNEXION D'UN RÉSEAU EN UN CLIC
+  if (url.pathname.startsWith('/api/channels/')) {
+    const shopSlug = url.searchParams.get('shop'), body = req.parsedBody || {};
+    const send = (code, data) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
+    if (!yeBrain.getMerchantConfig(shopSlug)) return send(404, { success: false, error: 'Entreprise inconnue' });
+    try {
+      if (url.pathname === '/api/channels/meta/start' && req.method === 'POST') {
+        return send(200, { success: true, url: connector.metaLoginUrl(shopSlug, String(body.platform || '')) });
+      }
+      if (url.pathname === '/api/channels/meta/pending' && req.method === 'GET') {
+        const choices = connector.pendingChoices(shopSlug, url.searchParams.get('id') || '');
+        return choices ? send(200, { success: true, ...choices }) : send(404, { success: false, error: 'Ce choix a expiré, relancez la connexion.' });
+      }
+      if (url.pathname === '/api/channels/meta/choose' && req.method === 'POST') {
+        return send(200, { success: true, channel: await connector.choose(shopSlug, String(body.id || ''), String(body.routeId || '')) });
+      }
+      if (url.pathname === '/api/channels/telegram' && req.method === 'POST') {
+        return send(200, { success: true, channel: await connector.connectTelegram(shopSlug, body.token) });
+      }
+      if (url.pathname === '/api/channels/disconnect' && req.method === 'POST') {
+        const done = await connector.disconnect(shopSlug, String(body.platform || ''), String(body.routeId || ''));
+        return done ? send(200, { success: true }) : send(404, { success: false, error: 'Réseau introuvable pour cette entreprise' });
+      }
+    } catch (e) {
+      return send(400, { success: false, error: e.message });
+    }
+    return send(404, { success: false, error: 'Route inconnue' });
   }
 
   // 7.B. STATISTIQUES ET ANALYSE (GET /api/analytics, GET /api/analytics/export)

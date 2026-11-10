@@ -171,6 +171,10 @@
     .qr-wrap { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: center; }
     .qr { width: 200px; height: 200px; border-radius: 14px; background: #fff; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; color: #475467; font-size: 13px; text-align: center; padding: 10px; }
     .qr img { width: 100%; height: 100%; object-fit: contain; }
+    dialog { border: 0; padding: 0; border-radius: 18px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg); width: min(480px, calc(100vw - 32px)); }
+    dialog::backdrop { background: rgba(16, 24, 40, .45); }
+    .tg-help summary::-webkit-details-marker { display: none; }
+    .tg-help[open] summary { display: none; }
     .steps { margin: 0; padding-left: 20px; color: var(--text-2); display: grid; gap: 6px; font-size: 13.5px; }
 
     /* ---------- Crédits ---------- */
@@ -362,7 +366,7 @@
     <!-- ===== Réseaux ===== -->
     <main data-page="channels" hidden>
       <div class="page stack">
-        <div class="callout callout-info" id="ch-intro"><span data-icon="info"></span><div>Connectez vos réseaux une seule fois : chaque message reçu est traité par votre assistant et rangé dans vos conversations. <strong>Vous n'avez aucune clé technique à saisir.</strong></div></div>
+        <div class="callout callout-info" id="ch-intro"><span data-icon="info"></span><div>Connectez vos réseaux une seule fois : chaque message reçu est traité par votre assistant et rangé dans vos conversations. <strong>Pour WhatsApp, Messenger et Instagram, il suffit de vous connecter avec Facebook</strong> ; pour Telegram, un seul code à coller.</div></div>
         <div class="card" id="wa-qr-card" hidden>
           <div class="card-head"><div><h2>WhatsApp par QR code</h2><p>Pour le numéro principal. Mode pilote : préférez la connexion officielle dès qu'elle est disponible.</p></div><span class="badge" id="wa-badge">…</span></div>
           <div class="card-body">
@@ -406,6 +410,14 @@
   </div>
 </div>
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation"></nav>
+
+<dialog id="choose-dlg">
+  <form id="choose-form">
+    <div style="padding:20px 22px 0"><h2 id="choose-title">Quel compte connecter ?</h2><p class="muted" style="font-size:13px;margin-top:2px">Votre autorisation couvre plusieurs comptes : choisissez celui de cette entreprise.</p></div>
+    <div id="choose-list" style="padding:16px 22px;display:grid;gap:8px;max-height:50vh;overflow-y:auto"></div>
+    <div class="card-foot"><button type="button" class="btn" onclick="this.closest('dialog').close()">Annuler</button><button class="btn btn-primary" id="choose-ok">Connecter ce compte</button></div>
+  </form>
+</dialog>
 
 <script>
   // ================== Données de base ==================
@@ -796,25 +808,100 @@
     ['web', 'Chat sur votre site', '#5b4bc4', '⌂', 'Un lien de discussion à partager partout, même sans réseau social.']
   ];
   let waTimer = null;
+  const META_NETS = ['whatsapp', 'messenger', 'instagram'];
   async function loadChannels() {
     const { ok, data } = await api('/api/channels?shop=' + encodeURIComponent(shopSlug)).catch(() => ({ ok: false }));
-    const st = ok ? data.channels : {};
+    const st = ok ? data.channels : {}, ready = ok ? data.ready : {};
     q('#channels').innerHTML = CHANNELS.map(([k, name, color, letter, desc]) => {
       const c = st[k] || {};
       const status = c.connected ? `<span class="badge badge-success"><span class="dot"></span> Connecté</span>` : `<span class="badge">Non connecté</span>`;
-      let action;
+      const accounts = (c.accounts || []).map(a => `<div class="copy-box" style="font-family:inherit"><span>${icon('check')} ${esc(a.name || a.routeId)}</span>${a.legacy ? '' : `<button type="button" class="btn btn-sm btn-ghost btn-danger" data-disconnect="${k}" data-route="${esc(a.routeId)}" data-name="${esc(a.name)}">Déconnecter</button>`}</div>`).join('');
+      let action = '';
       if (k === 'web') action = `<div class="copy-box"><span>${esc(location.origin + (c.link || '/?shop=' + shopSlug))}</span><button type="button" class="btn btn-sm" data-copy="${esc(location.origin + (c.link || '/?shop=' + shopSlug))}">${icon('copy')} Copier</button></div>`;
-      else if (k === 'whatsapp' && c.mode === 'qr' && data.admin) action = `<a class="btn btn-sm" href="#channels" onclick="q('#wa-qr-card').scrollIntoView({behavior:'smooth'});return false">${icon('qr')} Gérer la connexion QR</a>`;
-      else if (c.connected) action = `<span class="subtle">Les messages arrivent dans vos conversations.</span>`;
-      else action = `<button type="button" class="btn btn-sm" disabled title="Bientôt disponible">${icon('plug')} Connecter en un clic</button><span class="subtle">Bientôt : connexion via votre compte ${name === 'Telegram' ? 'Telegram' : 'Facebook'}, sans aucune clé à saisir.</span>`;
-      return `<div class="card ch"><div class="top"><span class="logo" style="background:${color}">${letter}</span><div class="t"><strong>${name}</strong></div>${status}</div><p>${desc}</p><div style="display:flex;flex-direction:column;gap:8px">${action}</div></div>`;
+      else if (META_NETS.includes(k)) {
+        action = ready.meta
+          ? `<button type="button" class="btn btn-sm ${c.connected ? '' : 'btn-primary'}" data-meta="${k}">${icon('plug')} ${c.connected ? 'Ajouter un autre compte' : 'Connecter avec Facebook'}</button>`
+          : `<button type="button" class="btn btn-sm" disabled>${icon('plug')} Connecter avec Facebook</button><span class="subtle">${data.admin ? 'À activer par vous : renseignez META_APP_ID, META_APP_SECRET et PUBLIC_URL (voir docs/CONNEXION-RESEAUX.md).' : 'Bientôt disponible : connexion avec votre compte Facebook, sans aucune clé à saisir.'}</span>`;
+        if (k === 'whatsapp' && c.mode === 'qr' && data.admin) action += `<a class="btn btn-sm" href="#channels" data-goto-qr>${icon('qr')} Connexion par QR code (pilote)</a>`;
+        if (k === 'instagram') action += `<span class="subtle">Le compte doit être professionnel et relié à une page Facebook.</span>`;
+      } else if (k === 'telegram') {
+        action = ready.telegram && !c.connected
+          ? `<details class="tg-help"><summary class="btn btn-sm btn-primary" style="list-style:none">${icon('plug')} Connecter mon bot</summary>
+              <ol class="steps" style="margin:12px 0">
+                <li>Dans Telegram, ouvrez <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> et envoyez <strong>/newbot</strong>.</li>
+                <li>Choisissez un nom puis un identifiant finissant par « bot ».</li>
+                <li>Copiez le code qu’il vous donne et collez-le ici.</li>
+              </ol>
+              <form class="tg-form" style="display:flex;gap:8px"><input class="input" name="token" placeholder="123456789:AA…" autocomplete="off" spellcheck="false" aria-label="Code du bot Telegram"><button class="btn btn-primary">Connecter</button></form>
+            </details>`
+          : ready.telegram ? '' : `<button type="button" class="btn btn-sm" disabled>${icon('plug')} Connecter mon bot</button><span class="subtle">${data.admin ? 'À activer par vous : renseignez PUBLIC_URL (adresse https du serveur).' : 'Bientôt disponible.'}</span>`;
+      }
+      if (c.connected && !accounts && k !== 'web') action = `<span class="subtle">Configuré par la plateforme. Les messages arrivent dans vos conversations.</span>` + action;
+      return `<div class="card ch"><div class="top"><span class="logo" style="background:${color}">${letter}</span><div class="t"><strong>${name}</strong></div>${status}</div><p>${desc}</p><div style="display:flex;flex-direction:column;gap:8px">${accounts}${action}</div></div>`;
     }).join('');
     const showQr = ok && data.admin && st.whatsapp?.mode === 'qr';
     q('#wa-qr-card').hidden = !showQr;
     clearInterval(waTimer);
     if (showQr) { checkWhatsApp(); waTimer = setInterval(() => currentPage === 'channels' ? checkWhatsApp() : clearInterval(waTimer), 4000); }
   }
-  q('#channels').addEventListener('click', e => { const b = e.target.closest('[data-copy]'); if (b) copyText(b.dataset.copy); });
+  q('#channels').addEventListener('click', async e => {
+    const copy = e.target.closest('[data-copy]'); if (copy) copyText(copy.dataset.copy);
+    if (e.target.closest('[data-goto-qr]')) { e.preventDefault(); q('#wa-qr-card').scrollIntoView({ behavior: 'smooth' }); }
+    const meta = e.target.closest('[data-meta]');
+    if (meta) {
+      meta.disabled = true; meta.innerHTML = '<span class="spinner"></span> Ouverture de Facebook…';
+      const { ok, data } = await api('/api/channels/meta/start', { shop: shopSlug, platform: meta.dataset.meta }).catch(() => ({ ok: false, data: {} }));
+      if (ok && data.url) location.href = data.url;
+      else { toast(data.error || 'Connexion impossible pour le moment', 'error'); loadChannels(); }
+    }
+    const dis = e.target.closest('[data-disconnect]');
+    if (dis) {
+      if (!confirm(`Déconnecter « ${dis.dataset.name} » ? L’assistant ne répondra plus sur ce compte.`)) return;
+      const { ok, data } = await api('/api/channels/disconnect', { shop: shopSlug, platform: dis.dataset.disconnect, routeId: dis.dataset.route });
+      toast(ok ? 'Compte déconnecté' : (data.error || 'Déconnexion impossible'), ok ? undefined : 'error');
+      loadChannels();
+    }
+  });
+  q('#channels').addEventListener('submit', async e => {
+    if (!e.target.classList.contains('tg-form')) return;
+    e.preventDefault();
+    const btn = e.target.querySelector('button'), token = e.target.token.value.trim();
+    if (!token) return;
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+    const { ok, data } = await api('/api/channels/telegram', { shop: shopSlug, token }).catch(() => ({ ok: false, data: {} }));
+    btn.disabled = false; btn.textContent = 'Connecter';
+    if (ok) { toast(`Bot ${data.channel.name} connecté : il répond dès maintenant.`); loadChannels(); }
+    else toast(data.error || 'Connexion impossible', 'error');
+  });
+
+  // Retour de Facebook : résultat de la connexion ou choix de la page / du numéro
+  async function handleConnectReturn() {
+    const p = params; // paramètres lus à l'ouverture, avant que l'adresse soit nettoyée
+    const names = { whatsapp: 'WhatsApp', messenger: 'Messenger', instagram: 'Instagram' };
+    if (p.has('connected')) toast(`${names[p.get('connected')] || 'Réseau'} connecté : l’assistant répond dès maintenant.`);
+    if (p.has('error')) toast(p.get('error'), 'error');
+    if (p.has('cancelled')) toast('Connexion annulée.');
+    if (p.has('choose')) {
+      const id = p.get('choose');
+      const { ok, data } = await api(`/api/channels/meta/pending?shop=${encodeURIComponent(shopSlug)}&id=${encodeURIComponent(id)}`);
+      if (!ok) toast(data.error || 'Ce choix a expiré', 'error');
+      else {
+        const dlg = q('#choose-dlg');
+        q('#choose-title').textContent = `Quel compte ${names[data.platform] || ''} connecter ?`;
+        q('#choose-list').innerHTML = data.accounts.map((a, i) => `<div class="opt"><input type="radio" name="acc" id="acc${i}" value="${esc(a.routeId)}"${i ? '' : ' checked'}><label for="acc${i}"><strong>${esc(a.name)}</strong></label></div>`).join('');
+        q('#choose-form').onsubmit = async ev => {
+          ev.preventDefault();
+          const btn = q('#choose-ok'); btn.disabled = true;
+          const r = await api('/api/channels/meta/choose', { shop: shopSlug, id, routeId: q('#choose-form').acc.value });
+          btn.disabled = false;
+          if (r.ok) { dlg.close(); toast(`${r.data.channel.name} connecté : l’assistant répond dès maintenant.`); loadChannels(); }
+          else toast(r.data.error || 'Connexion impossible', 'error');
+        };
+        dlg.showModal();
+      }
+    }
+    if (['connected', 'error', 'cancelled', 'choose'].some(k => p.has(k))) history.replaceState(null, '', '?shop=' + encodeURIComponent(shopSlug) + location.hash);
+  }
   async function checkWhatsApp() {
     const { ok, data } = await api('/api/whatsapp/status').catch(() => ({ ok: false }));
     if (!ok) return;
@@ -859,6 +946,7 @@
   (async () => {
     await loadMerchant();
     route();
+    handleConnectReturn();
     setInterval(() => {
       if (document.hidden) return;
       if (currentPage === 'inbox') { loadInbox(); if (ib.current) openConversation(ib.current, { keepScroll: true }); }
